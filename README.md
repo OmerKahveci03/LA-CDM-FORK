@@ -1,8 +1,8 @@
 # Language Agents for Hypothesis-driven Clinical Decision Making with Reinforcement Learning
 
-📄 [**Paper**](https://arxiv.org/abs/2506.13474)
+[![](https://img.shields.io/badge/Paper-2503.02623-blue)](https://arxiv.org/abs/2506.13474)
 
-This repository contains the official code for the paper
+This repository contains the official implementation of the paper
 
 > **Language Agents for Hypothesis-driven Clinical Decision Making with Reinforcement Learning**
 >
@@ -11,6 +11,7 @@ This repository contains the official code for the paper
 > 
 > to be published at ICLR 2026
 
+<img src="https://raw.githubusercontent.com/dharouni/LA-CDM/main/overview.png" width="750">
 
 ## Abstract
 
