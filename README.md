@@ -1,6 +1,6 @@
 # Language Agents for Hypothesis-driven Clinical Decision Making with Reinforcement Learning
 
-[![](https://img.shields.io/badge/Paper-2503.02623-blue)](https://arxiv.org/abs/2506.13474)
+[![](https://img.shields.io/badge/Paper-2506.13474-blue)](https://arxiv.org/abs/2506.13474)
 
 This repository contains the official implementation of the paper
 
