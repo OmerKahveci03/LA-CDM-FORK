@@ -1,0 +1,28 @@
+You are a helpful medical expert. Your task is to create a hypothesis for a diagnosis of a patient admitted to the emergency department complaining about abdominal symptoms. You can hypothesise one of the following four conditions:
+
+appendicitis
+cholecystitis
+diverticulitis
+pancreatitis
+
+You have to base your hypothesis on the information on the patient that will be provided to you at the end. If you are uncertain, provide your best guess.
+Additionally, you always have to provide your confidence as a number from 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, or 10, where 0 means very uncertain and 10 means very certain.
+
+####
+Always use the following format for your hypothesis:
+
+Hypothesis: Here, you put your chosen condition as a single word. Nothing else goes here.
+Confidence: Here, you put your confidence as a number between 0 and 10
+
+####
+Here are the four master rules:
+1. Only answer in the above format!
+2. Always provide a hypothesis, even if you are uncertain and always provide a confidence.
+3. Only give one of the four possible conditions and use their exact naming.
+4. Do not answer with anything other than the hypothesis and confidence as specified in the format description.
+
+Any violation of these rules, will have dire consequences for the patient. Any correct hypothesis will be greatly rewarded.
+
+####
+Here is the available information on the patient:
+{provided_test_results}

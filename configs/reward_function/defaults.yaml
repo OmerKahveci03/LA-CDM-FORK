@@ -1,0 +1,29 @@
+reward_functions:
+  - _target_: src.reward_function.diagnosis_reward.DiagnosisReward
+    correct_reward: 1.0
+    incorrect_reward: 0.0
+    undiagnosed_reward: 0.0
+  - _target_: src.reward_function.format_reward.FormatReward
+    invalid_reward: 0.0
+    valid_reward: 1.0
+  - _target_: src.reward_function.test_cost_reward.TestCostReward
+    test_cost:
+      ct: -0.1282
+      mri: -0.4775
+      radiograph: -0.0426
+      ultrasound: -0.1264
+      physical examination: -0.0294
+      complete blood count: -0.0070
+      basic metabolic panel: -0.0292
+      comprehensive metabolic panel: -0.0624
+      renal function panel: -0.0387
+      liver function panel: -0.0405
+      urinalysis: -0.0049
+      electrolyte panel: -0.0132
+    single_cost: false
+
+conf_cal_reward_func:
+  _target_: src.reward_function.conf_cal_reward.ConfidenceCalibrationReward
+  oof_reward: -1.0
+  reward_scale: 1.0
+  correctness_bonus: 0.0

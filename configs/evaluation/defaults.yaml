@@ -1,0 +1,19 @@
+adapter_dir: /home/guests/david_bani_harouni/projects/CDM_refactor/CDM_claude/CDM/outputs/2026-03-17/10-19-58/checkpoint-3840
+metrics_output_file: "outputs/2026-03-17/10-19-58/checkpoint-3840/test_metrics.json"
+run_name_suffix: "-eval"
+base_model: false
+
+# Real-world USD costs per diagnostic test (used for avg diagnostic cost metric)
+test_costs_usd:
+  ct: 1306
+  mri: 4866
+  radiograph: 434
+  ultrasound: 1288
+  physical examination: 300
+  complete blood count: 71
+  basic metabolic panel: 298
+  comprehensive metabolic panel: 636
+  renal function panel: 394
+  liver function panel: 413
+  urinalysis: 50
+  electrolyte panel: 134

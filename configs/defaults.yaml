@@ -1,0 +1,15 @@
+defaults:
+  - _self_
+  - training: defaults
+  - dataset: defaults
+  - wandb: defaults
+  - model: defaults
+  - reward_function: defaults
+  - environment: la_cdm
+  - experiment: la_cdm
+  - evaluation: defaults
+
+hydra:
+  job:
+    chdir: false
+

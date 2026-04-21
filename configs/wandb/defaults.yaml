@@ -1,0 +1,4 @@
+# Weights & Biases configuration
+project: mimic-cdm
+mode: online 
+save_code: false

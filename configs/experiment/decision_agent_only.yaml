@@ -1,0 +1,11 @@
+# @package _global_
+
+defaults:
+  - override /environment: decision_agent_only
+
+experiment:
+    name: la-cdm-decision-agent-only
+    tags: []
+
+training:
+  loss_schedule: null

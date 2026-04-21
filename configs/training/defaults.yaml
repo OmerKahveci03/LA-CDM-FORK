@@ -1,0 +1,57 @@
+# GRPO config parameters
+# Output and logging settings
+output_dir: "outputs"
+report_to: "wandb"
+logging_strategy: "steps"
+logging_steps: 1
+save_strategy: "steps"
+save_steps: 100
+save_total_limit: 5
+load_best_model_at_end: false
+metric_for_best_model: loss
+log_completions: true
+eval_strategy: "steps"
+eval_steps: 100
+eval_on_start: false
+
+# Training hyperparameters
+learning_rate: 1e-5
+num_train_epochs: 2
+lr_scheduler_type: "constant"
+beta: 0.04  # KL divergence weight (default is 0.04)
+loss_type: "dr_grpo" # "grpo" or "dr_grpo"
+da_loss_weight: 1.0
+ha_sft_loss_weight: 0.0
+
+# Loss scheduling configuration
+loss_schedule:
+  phases:
+    - name: "da"
+      steps: 100
+      learning_rate: 1e-5
+    - name: "ha_sft"
+      steps: 100
+      learning_rate: 1e-5
+    - name: "ha_conf_cal"
+      steps: 100
+      learning_rate: 1e-5
+  repeat: true  # Whether to repeat the schedule after completion
+
+# Batch and gradient settings
+gradient_accumulation_steps: 1 
+per_device_train_batch_size: 2
+per_device_eval_batch_size: 8
+gradient_checkpointing: true
+
+# Generation parameters
+num_generations: 8
+max_completion_length: 256 # This is the max length of each model completion, not the max length of the trajectory. This value is defined in environment/
+max_prompt_length: 1024
+
+# Hardware optimization
+bf16: true
+bf16_full_eval: true
+use_vllm: true
+vllm_gpu_memory_utilization: 0.6
+
+seed: 269

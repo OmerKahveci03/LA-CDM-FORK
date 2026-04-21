@@ -1,0 +1,18 @@
+# @package _global_
+
+experiment:
+    name: la-cdm
+    tags: []
+
+training:
+  loss_schedule:
+    phases:
+      - name: "da"
+        steps: 100
+        learning_rate: 1e-5
+      - name: "ha_sft"
+        steps: 100
+        learning_rate: 1e-5
+      - name: "ha_conf_cal"
+        steps: 100
+        learning_rate: 1e-5

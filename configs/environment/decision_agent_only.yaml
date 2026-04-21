@@ -1,0 +1,6 @@
+prompt_template_file: "prompts/decision_agent_only.txt"
+hypothesis_prompt_template_file: "prompts/hypothesis_agent.txt"  # unused but required by code; removed in Step 7c
+generate_hypothesis: false
+generate_confidence_calibration: false
+max_length: 4096
+max_steps: 13

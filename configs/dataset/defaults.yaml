@@ -1,0 +1,25 @@
+train_data_file: data/train.csv
+val_data_file: data/val.csv
+test_data_file: data/test.csv
+lab_test_mapping_file: data/lab_test_mapping.csv
+lab_tests:
+ - Complete Blood Count
+ - Basic Metabolic Panel
+ - Comprehensive Metabolic Panel
+ - Renal Function Panel
+ - Liver Function Panel
+ - Urinalysis
+ - Electrolyte Panel
+imaging_tests:
+ - CT
+ - MRI
+ - Radiograph
+ - Ultrasound
+other_tests:
+ - Physical Examination
+disease_list:
+ - appendicitis
+ - cholecystitis
+ - diverticulitis
+ - pancreatitis
+small_sample: false
