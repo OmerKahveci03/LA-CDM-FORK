@@ -35,11 +35,11 @@ uv sync
 
 ## Data
 
-LA-CDM trains on [**MIMIC-IV-Ext-CDM**](https://physionet.org/content/mimic-iv-ext-cdm/1.0/) (Hager et al.), a MIMIC-IV derived dataset with 2,400 patients across four abdominal conditions: appendicitis, cholecystitis, diverticulitis, and pancreatitis.
+LA-CDM trains on [**MIMIC-IV-Ext-CDM**](https://physionet.org/content/mimic-iv-ext-cdm/1.0/) (Hager et al.), a MIMIC-IV derived dataset with 2,400 patients across four abdominal conditions: appendicitis, cholecystitis, diverticulitis, and pancreatitis. First, follow the steps described in the official [MIMIC-CDM repository](https://github.com/paulhager/MIMIC-Clinical-Decision-Making-Dataset) to process the raw PhysioNet download.
 
 ### Data Preparation
 
-The preparation pipeline converts the raw PhysioNet download into the CSV files expected by the training code. It has three steps:
+The preparation pipeline converts the processed PhysioNet download into the CSV files expected by the training code. It has three steps:
 
 1. **Split** the four per-condition pickle files into stratified train / val / test CSVs (80 / 10 / 10).
 2. **Copy** the lab test mapping.
