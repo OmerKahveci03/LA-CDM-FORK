@@ -1,5 +1,5 @@
-adapter_dir: /home/guests/david_bani_harouni/projects/CDM_refactor/CDM_claude/CDM/outputs/2026-03-17/10-19-58/checkpoint-3840
-metrics_output_file: "outputs/2026-03-17/10-19-58/checkpoint-3840/test_metrics.json"
+adapter_dir: 
+metrics_output_file: 
 run_name_suffix: "-eval"
 base_model: false
 
