@@ -1,3 +1,7 @@
+# Fork
+This repo is a fork from https://github.com/dharouni/LA-CDM. My goal is to reproduce the results of the paper using a
+different model but same dataset.
+
 # Language Agents for Hypothesis-driven Clinical Decision Making with Reinforcement Learning
 
 [![](https://img.shields.io/badge/Paper-2506.13474-blue)](https://arxiv.org/abs/2506.13474)
