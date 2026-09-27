@@ -1,0 +1,3 @@
+[submodule "extract_data/MIMIC-Clinical-Decision-Making-Dataset"]
+	path = extract_data/MIMIC-Clinical-Decision-Making-Dataset
+	url = https://github.com/paulhager/MIMIC-Clinical-Decision-Making-Dataset.git
