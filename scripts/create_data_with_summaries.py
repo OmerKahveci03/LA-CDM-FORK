@@ -58,6 +58,7 @@ def summarize_histories(
     max_new_tokens: int = 512,
     model=None,
     tokenizer=None,
+    checkpoint_every: int = 25,
 ) -> None:
     """Add a ``Patient History Summary`` column to a CSV using an LLM.
 
@@ -76,8 +77,16 @@ def summarize_histories(
     df = pd.read_csv(input_file)
     print(f"Summarizing {len(df)} patient histories from {input_file}")
 
-    summaries = []
-    for _, row in tqdm(df.iterrows(), total=len(df)):
+    if "Patient History Summary" not in df.columns:
+        df["Patient History Summary"] = pd.NA
+
+    completed = df["Patient History Summary"].fillna("").astype(str).str.strip().ne("")
+    print(f"Resuming with {int(completed.sum())}/{len(df)} summaries already complete")
+
+    generated_since_checkpoint = 0
+    for index, row in tqdm(df.iterrows(), total=len(df)):
+        if completed.loc[index]:
+            continue
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": row["Patient History"]},
@@ -90,17 +99,18 @@ def summarize_histories(
             outputs = model.generate(
                 input_ids,
                 max_new_tokens=max_new_tokens,
-                do_sample=True,
-                temperature=1.0,
-                top_p=1.0,
+                do_sample=False,
                 pad_token_id=tokenizer.pad_token_id,
             )
         response = tokenizer.decode(
             outputs[0, input_ids.shape[-1]:], skip_special_tokens=True
         )
-        summaries.append(response)
+        df.at[index, "Patient History Summary"] = response.strip()
+        generated_since_checkpoint += 1
+        if generated_since_checkpoint >= checkpoint_every:
+            df.to_csv(output_file, index=False)
+            generated_since_checkpoint = 0
 
-    df["Patient History Summary"] = summaries
     df.to_csv(output_file, index=False)
     print(f"Saved {output_file}")
 
@@ -111,7 +121,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--model", type=str, required=True,
-        help="HuggingFace model name or local path (e.g. Qwen/Qwen2.5-7B-Instruct).",
+        help="Hugging Face model name or local Transformers model path.",
     )
     parser.add_argument(
         "--input_file", type=str, required=True,
@@ -125,10 +135,20 @@ def main() -> None:
         "--max_new_tokens", type=int, default=512,
         help="Maximum tokens per summary (default: 512).",
     )
+    parser.add_argument(
+        "--checkpoint_every", type=int, default=25,
+        help="Save progress after this many new summaries (default: 25).",
+    )
     args = parser.parse_args()
 
     output_file = Path(args.output_file) if args.output_file else Path(args.input_file)
-    summarize_histories(Path(args.input_file), output_file, args.model, args.max_new_tokens)
+    summarize_histories(
+        Path(args.input_file),
+        output_file,
+        args.model,
+        args.max_new_tokens,
+        checkpoint_every=args.checkpoint_every,
+    )
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ Requires a GPU for step 3.  Run via SLURM::
 
     srun --gres=gpu:1 python scripts/prepare_data.py \\
         --data_dir /path/to/mimic-iv-ext-cdm/1.1 \\
-        --model Qwen/Qwen2.5-7B-Instruct
+        --model /blue/data/ai/models/nlp/llama/models_llama3/Meta-Llama-3-8B-Instruct-hf
 """
 
 import argparse
@@ -70,7 +70,8 @@ def main() -> None:
         help="Output directory (default: data/).",
     )
     parser.add_argument(
-        "--model", type=str, default="mistralai/Mixtral-8x7B-Instruct-v0.1",
+        "--model", type=str,
+        default="/blue/data/ai/models/nlp/llama/models_llama3/Meta-Llama-3-8B-Instruct-hf",
         help="HuggingFace model for patient history summarization.",
     )
     parser.add_argument(

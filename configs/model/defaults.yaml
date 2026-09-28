@@ -1,4 +1,4 @@
-model_name: "Qwen/Qwen2.5-7B-Instruct"
+model_name: "/blue/data/ai/models/nlp/llama/models_llama3/Meta-Llama-3-8B-Instruct-hf"
 lora_r: 8  # LoRA attention dimension
 lora_alpha: 16  # LoRA alpha scaling
 lora_dropout: 0.1
