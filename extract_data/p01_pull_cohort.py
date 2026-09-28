@@ -1,4 +1,4 @@
-"""Extract the raw MIMIC-IV rows needed to build the MIMIC-CDM cohort.
+"""Step 1: Extract the raw MIMIC-IV rows needed to build the MIMIC-CDM cohort.
 
 This is a *candidate cohort* extractor.  It identifies hospital admissions whose
 ICD diagnosis title contains one of the four MIMIC-CDM diseases, requires a

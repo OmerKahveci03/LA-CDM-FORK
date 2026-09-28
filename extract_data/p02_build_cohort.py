@@ -1,4 +1,4 @@
-"""Run the vendored official MIMIC-CDM cohort builder."""
+"""Step 2: Run the vendored official MIMIC-CDM cohort builder."""
 
 from __future__ import annotations
 
