@@ -91,13 +91,20 @@ def summarize_histories(
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": row["Patient History"]},
         ]
-        input_ids = tokenizer.apply_chat_template(
-            messages, return_tensors="pt", add_generation_prompt=True
-        ).to(model.device)
+        model_inputs = tokenizer.apply_chat_template(
+            messages,
+            return_tensors="pt",
+            add_generation_prompt=True,
+            return_dict=True,
+        )
+        model_inputs = {
+            key: value.to(model.device) for key, value in model_inputs.items()
+        }
+        input_ids = model_inputs["input_ids"]
 
         with torch.no_grad():
             outputs = model.generate(
-                input_ids,
+                **model_inputs,
                 max_new_tokens=max_new_tokens,
                 do_sample=False,
                 pad_token_id=tokenizer.pad_token_id,
