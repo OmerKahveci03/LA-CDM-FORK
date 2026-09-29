@@ -207,6 +207,12 @@ home quota is insufficient. Use `--no-cache-dir` for large pip installs.
 Run `slurm/zero_shot_smoke.sbatch`, inspect both log files, and confirm that
 metrics are written for two test cases.
 
+The two-L4 run successfully loaded both the Transformers and vLLM model copies
+and completed CUDA graph capture, confirming that the current GPU and host-memory
+requests are sufficient. The subsequent failure was a Llama tokenizer issue,
+not an OOM: Llama 3 has no default padding token. The custom trainer now uses
+the EOS token for padding and propagates its ID to the model configuration.
+
 ### 2. Run the full zero-shot baseline
 
 Record diagnostic accuracy, diagnostic cost, requested tests, interaction
