@@ -78,7 +78,7 @@ dependencies = [
     "jupyter-client==8.6.3",
     "jupyter-core==5.8.1",
     "lark==1.2.2",
-    "llvmlite==0.43.0",
+    "llvmlite==0.44.0",
     "lm-format-enforcer==0.10.11",
     "markdown-it-py==3.0.0",
     "markupsafe==3.0.2",
