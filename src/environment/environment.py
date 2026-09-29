@@ -183,12 +183,22 @@ class Environment:
         #    expect the model to generate the "Observation:" keyword – that will
         #    be appended by the environment itself. Therefore a single pattern
         #    suffices for both Test and Diagnosis actions.
-        pattern = r"Thought: (.*)\n{1,2}Action: (.*)\n{1,2}Action Input: (.*)"
+        # Llama may render the requested field labels in Markdown (for example,
+        # ``**Action:**``) or add indentation. Accept those cosmetic changes,
+        # while still requiring all three fields in the expected order.
+        label = lambda name: rf"\s*(?:\*\*)?{name}(?:\*\*)?\s*:\s*"
+        pattern = (
+            rf"{label('Thought')}(.*?)\r?\n+"
+            rf"{label('Action')}([^\r\n]+)\r?\n+"
+            rf"{label('Action Input')}([^\r\n]+)"
+        )
 
-        match = re.search(pattern, trajectory.last_completion)
+        match = re.search(pattern, trajectory.last_completion, flags=re.IGNORECASE | re.DOTALL)
         if match:
             _, action, action_input = match.groups()
-            return True, action.lower(), action_input.lower()
+            action = action.strip().strip("*[]").strip().rstrip(".").lower()
+            action_input = action_input.strip().strip("*[]").strip().rstrip(".").lower()
+            return True, action, action_input
         
         return False, None, None
       

@@ -227,6 +227,11 @@ standard Trainer loss and timing fields. The custom trainer had copied the log
 dictionary before adding diagnostic metrics, so `evaluate()` could not return
 them to the save step. It now updates the Trainer-owned dictionary in place so
 accuracy, calibration, reward, test-count, and diagnostic-cost fields are saved.
+The next smoke metrics file was complete, but both final diagnoses were
+unparsed (`eval_none_fraction=1.0`, `FormatReward=0`). The action parser was
+written for exact Qwen-style plain-text labels. It now accepts Llama's cosmetic
+Markdown, indentation, whitespace, and trailing-period variations while still
+requiring the three action fields and validating actions against the allowlists.
 
 ### 2. Run the full zero-shot baseline
 
