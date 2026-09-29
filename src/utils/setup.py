@@ -221,6 +221,7 @@ def configure_grpo(cfg: DictConfig, eval_only: bool = False) -> GRPOConfig:
             # Training hyperparameters
             learning_rate=cfg.training.learning_rate,
             num_train_epochs=cfg.training.num_train_epochs,
+            max_steps=cfg.training.max_steps,
             lr_scheduler_type=cfg.training.lr_scheduler_type,
             beta=cfg.training.beta,
             # Batch and gradient settings

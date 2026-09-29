@@ -256,16 +256,36 @@ measured as undiagnosed zero-shot failures rather than pipeline errors. The
 full 240-case job is `slurm/zero_shot_full.sbatch`; it uses two L4 GPUs and 64
 GB of RAM and writes job-specific metrics under `outputs/`.
 
-### 2. Run the full zero-shot baseline
+The full zero-shot baseline completed successfully as Slurm job `43908263` in
+2,540.7 seconds (42.3 minutes). Key results across 240 test cases:
 
-Submit `slurm/zero_shot_full.sbatch` and record diagnostic accuracy, diagnostic
-cost, requested tests, interaction length, formatting failures, and per-disease
-performance.
+| Metric | Result |
+|---|---:|
+| Overall accuracy (counting undiagnosed as wrong) | 8.75% |
+| Undiagnosed/invalid fraction | 87.92% |
+| Accuracy among the 29 completed diagnoses | 72.41% |
+| Macro F1 (all cases) | 15.54% |
+| Macro F1 (completed diagnoses only) | 68.50% |
+| Hypothesis-agent accuracy | 65.25% |
+| Expected calibration error | 10.87% |
+| Average tests requested | 1.16 |
+| Average diagnostic cost | $798.08 |
+
+The large gap between all-case and completed-case accuracy shows that the main
+zero-shot weakness is failure to finish the required action protocol, rather
+than poor diagnostic discrimination when Llama does return a diagnosis.
+
+### 2. Full zero-shot baseline (complete)
+
+The 240-case baseline completed successfully; results are recorded above.
 
 ### 3. Run a short training smoke test
 
 Confirm LoRA attachment, forward/backward passes, checkpoint creation, adapter
 loading, and GPU memory usage before requesting a full training allocation.
+The two-step job is `slurm/train_smoke.sbatch`. It uses the two-case sample,
+two generations per case, two L4 GPUs, 64 GB RAM, and writes checkpoints to
+`outputs/train_smoke_<JOB_ID>/`.
 
 ### 4. Run full training and evaluation
 
