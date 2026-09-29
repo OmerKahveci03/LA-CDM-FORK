@@ -16,7 +16,7 @@ from src.utils.setup import (
 )
 
 
-@hydra.main(config_path="../configs", config_name="defaults")
+@hydra.main(version_base=None, config_path="../configs", config_name="defaults")
 def main(cfg: DictConfig):
     set_seed(cfg.training.seed)
 

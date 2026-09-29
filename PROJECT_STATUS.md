@@ -149,8 +149,10 @@ sbatch slurm/zero_shot_smoke.sbatch
 The first smoke attempt exposed and led to fixes for:
 
 - Duplicate `itemid` aliases in the generated lab mapping
+- Curated synonym item IDs with no standalone row in the filtered lab mapping
 - RTX PRO 6000 Blackwell (`sm_120`) incompatibility with pinned PyTorch 2.6
 - Implicit Accelerate defaults and incomplete Hydra tracebacks
+- Missing Hydra `version_base` declarations
 
 The revised job requests two L4 GPUs. Transformers uses GPU 0 and vLLM uses
 GPU 1.

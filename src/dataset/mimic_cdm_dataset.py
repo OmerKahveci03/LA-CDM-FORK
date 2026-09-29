@@ -43,11 +43,16 @@ class MIMICCDMDataset(Dataset):
                     self.lab_test_mapping['itemid'] == id
                 ]
                 if matching_ids.empty:
-                    raise ValueError(f"Lab test mapping has no label for itemid {id}")
-                # The generated mapping can contain multiple aliases for one
-                # itemid. All are medically equivalent here; use the first
-                # stable label instead of requiring a scalar row with .item().
-                self.id_to_name[id] = matching_ids['label'].dropna().iloc[0]
+                    # Curated synonym groups may include valid MIMIC itemids
+                    # that have no standalone row in this cohort's filtered
+                    # mapping. The requested panel name is a safe display name.
+                    self.id_to_name[id] = test
+                else:
+                    # The generated mapping can contain multiple aliases for
+                    # one itemid. All are medically equivalent here; use the
+                    # first stable label instead of requiring a scalar row.
+                    labels = matching_ids['label'].dropna()
+                    self.id_to_name[id] = labels.iloc[0] if not labels.empty else test
         # Iterate over data and populate the test columns with the corresponding values
         for idx, row in self.data.iterrows():
             lab_results = row['Laboratory Tests']
