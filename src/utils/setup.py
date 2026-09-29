@@ -186,6 +186,7 @@ def configure_grpo(cfg: DictConfig, eval_only: bool = False) -> GRPOConfig:
             eval_strategy="no",
             log_completions=cfg.training.log_completions,
             per_device_eval_batch_size=cfg.training.per_device_eval_batch_size,
+            beta=0.0,
             num_generations=1,
             max_completion_length=cfg.training.max_completion_length,
             max_prompt_length=cfg.training.max_prompt_length,

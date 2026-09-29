@@ -153,6 +153,7 @@ The first smoke attempt exposed and led to fixes for:
 - RTX PRO 6000 Blackwell (`sm_120`) incompatibility with pinned PyTorch 2.6
 - Implicit Accelerate defaults and incomplete Hydra tracebacks
 - Missing Hydra `version_base` declarations
+- Eval-only trainer unnecessarily deep-copying the full model for KL reference
 
 The revised job requests two L4 GPUs. Transformers uses GPU 0 and vLLM uses
 GPU 1.

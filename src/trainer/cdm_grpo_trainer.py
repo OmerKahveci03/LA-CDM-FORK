@@ -147,7 +147,11 @@ class CDMGRPOTrainer(GRPOTrainer):
             model = get_peft_model(model, peft_config)
 
         # Reference model
-        if is_deepspeed_zero3_enabled():
+        if args.beta == 0.0:
+            # Evaluation does not compute a KL loss, so a reference-model copy
+            # only wastes one full model's worth of GPU memory.
+            self.ref_model = None
+        elif is_deepspeed_zero3_enabled():
             self.ref_model = AutoModelForCausalLM.from_pretrained(model_id, **model_init_kwargs)
         elif not is_peft_model(model):
             # If PEFT configuration is not provided, create a reference model based on the initial model.

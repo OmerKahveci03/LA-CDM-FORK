@@ -23,6 +23,7 @@ fi
 cd "$REPO_DIR"
 export VLLM_USE_V1=0
 export HYDRA_FULL_ERROR=1
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 echo "[SLURM] Started: $(date)"
 echo "[SLURM] Host: $(hostname)"
