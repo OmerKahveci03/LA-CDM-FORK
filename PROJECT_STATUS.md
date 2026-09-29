@@ -295,6 +295,14 @@ Adapter evaluation job `43933004` also completed successfully, confirming that
 the saved LoRA adapter can be loaded, merged into vLLM, and used for inference.
 Before the full allocation, `slurm/train_scale_smoke.sbatch` performs one step
 with the production setting of eight generations to verify peak GPU memory.
+The first scale attempt (`43934146`) incorrectly set the forward microbatch to
+eight and OOMed while Accelerate converted a 3.69-GiB logits tensor to FP32.
+The production configuration uses eight GRPO generations split into four
+microbatches of two; the scale-smoke job now matches that configuration.
+The corrected scale run (`43934814`) completed successfully with finite loss
+and gradients. Full training is ready in `slurm/train_full.sbatch`: 480 steps
+over two epochs, checkpoints every 100 steps, two L4 GPUs, 64 GB RAM, and a
+16-hour wall-time allocation.
 
 ### 4. Run full training and evaluation
 
