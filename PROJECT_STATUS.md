@@ -291,6 +291,10 @@ Job `43931304` completed both optimizer steps in 69.6 seconds. Gradients were
 finite, KL became nonzero on step two, and the final LoRA adapter was saved to
 `outputs/train_smoke_43931304/`. The remaining check is loading that adapter
 with `slurm/adapter_smoke.sbatch` and evaluating it on two cases.
+Adapter evaluation job `43933004` also completed successfully, confirming that
+the saved LoRA adapter can be loaded, merged into vLLM, and used for inference.
+Before the full allocation, `slurm/train_scale_smoke.sbatch` performs one step
+with the production setting of eight generations to verify peak GPU memory.
 
 ### 4. Run full training and evaluation
 
