@@ -212,6 +212,9 @@ and completed CUDA graph capture, confirming that the current GPU and host-memor
 requests are sufficient. The subsequent failure was a Llama tokenizer issue,
 not an OOM: Llama 3 has no default padding token. The custom trainer now uses
 the EOS token for padding and propagates its ID to the model configuration.
+The next run passed tokenization and exposed an unconditional PEFT
+`disable_adapter()` call during zero-shot evaluation. The trainer now uses that
+context only when the loaded model actually has a PEFT adapter.
 
 ### 2. Run the full zero-shot baseline
 

@@ -39,6 +39,7 @@ if is_sagemaker_mp_enabled():
     from transformers.trainer_pt_utils import smp_forward_backward  # type: ignore
 
 from collections import defaultdict
+from contextlib import nullcontext
 import warnings
 from unittest.mock import patch
 
@@ -530,7 +531,13 @@ class CDMGRPOTrainer(GRPOTrainer):
                     self.ref_model, ha_conf_cal_prompt_completion_ids, ha_conf_cal_attention_mask, logits_to_keep,
                 )
             else:
-                with self.accelerator.unwrap_model(self.model).disable_adapter():
+                unwrapped_model = self.accelerator.unwrap_model(self.model)
+                adapter_context = (
+                    unwrapped_model.disable_adapter()
+                    if hasattr(unwrapped_model, "disable_adapter")
+                    else nullcontext()
+                )
+                with adapter_context:
                     ha_conf_cal_ref_per_token_logps = self._get_per_token_logps(
                         self.model, ha_conf_cal_prompt_completion_ids, ha_conf_cal_attention_mask, logits_to_keep,
                     )
@@ -580,7 +587,13 @@ class CDMGRPOTrainer(GRPOTrainer):
                     self.ref_model, prompt_completion_ids, attention_mask, logits_to_keep,
                 )
             else:
-                with self.accelerator.unwrap_model(self.model).disable_adapter():
+                unwrapped_model = self.accelerator.unwrap_model(self.model)
+                adapter_context = (
+                    unwrapped_model.disable_adapter()
+                    if hasattr(unwrapped_model, "disable_adapter")
+                    else nullcontext()
+                )
+                with adapter_context:
                     ref_per_token_logps = self._get_per_token_logps(
                         self.model, prompt_completion_ids, attention_mask, logits_to_keep,
                     )
