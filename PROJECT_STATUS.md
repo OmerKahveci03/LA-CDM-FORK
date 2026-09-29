@@ -279,13 +279,18 @@ than poor diagnostic discrimination when Llama does return a diagnosis.
 
 The 240-case baseline completed successfully; results are recorded above.
 
-### 3. Run a short training smoke test
+### 3. Short training smoke test (training passed)
 
 Confirm LoRA attachment, forward/backward passes, checkpoint creation, adapter
 loading, and GPU memory usage before requesting a full training allocation.
 The two-step job is `slurm/train_smoke.sbatch`. It uses the two-case sample,
 two generations per case, two L4 GPUs, 64 GB RAM, and writes checkpoints to
 `outputs/train_smoke_<JOB_ID>/`.
+
+Job `43931304` completed both optimizer steps in 69.6 seconds. Gradients were
+finite, KL became nonzero on step two, and the final LoRA adapter was saved to
+`outputs/train_smoke_43931304/`. The remaining check is loading that adapter
+with `slurm/adapter_smoke.sbatch` and evaluating it on two cases.
 
 ### 4. Run full training and evaluation
 
