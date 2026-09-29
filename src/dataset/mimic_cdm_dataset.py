@@ -29,10 +29,25 @@ class MIMICCDMDataset(Dataset):
         self.test_ids = {}
         self.id_to_name = {}
         for test in lab_tests:
-            corresponding_ids = ast.literal_eval(self.lab_test_mapping[self.lab_test_mapping['label'] == test]['corresponding_ids'].item())
+            matching_tests = self.lab_test_mapping[
+                self.lab_test_mapping['label'] == test
+            ]
+            if matching_tests.empty:
+                raise ValueError(f"Lab test mapping has no entry for {test!r}")
+            corresponding_ids = ast.literal_eval(
+                matching_tests['corresponding_ids'].iloc[0]
+            )
             self.test_ids[test] = corresponding_ids
             for id in corresponding_ids:
-                self.id_to_name[id] = self.lab_test_mapping[self.lab_test_mapping['itemid'] == ast.literal_eval(self.lab_test_mapping[self.lab_test_mapping['itemid'] == id]['corresponding_ids'].item())[0]]['label'].item()
+                matching_ids = self.lab_test_mapping[
+                    self.lab_test_mapping['itemid'] == id
+                ]
+                if matching_ids.empty:
+                    raise ValueError(f"Lab test mapping has no label for itemid {id}")
+                # The generated mapping can contain multiple aliases for one
+                # itemid. All are medically equivalent here; use the first
+                # stable label instead of requiring a scalar row with .item().
+                self.id_to_name[id] = matching_ids['label'].dropna().iloc[0]
         # Iterate over data and populate the test columns with the corresponding values
         for idx, row in self.data.iterrows():
             lab_results = row['Laboratory Tests']

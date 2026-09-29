@@ -1,6 +1,6 @@
 # LA-CDM Llama Reproduction Status
 
-Last updated: September 27, 2026
+Last updated: September 29, 2026
 
 ## Goal
 
@@ -119,20 +119,41 @@ The lab mapping was copied into `data/lab_test_mapping.csv`.
 - Passes an attention mask to generation
 - Loads Llama in 4-bit NF4 mode
 
-## Current Work
+### 6. Completed and validated all summaries
 
-The 1,920 training histories are being summarized with Llama 3 8B. The observed
-speed is approximately 5.2 seconds per case, or about 2.75 hours total.
+Llama summaries are complete for all 2,400 cases:
 
-Training summarization command:
+| Split | Complete summaries |
+|---|---:|
+| Train | 1,920 / 1,920 |
+| Validation | 240 / 240 |
+| Test | 240 / 240 |
+
+Prepared-data validation script:
 
 ```bash
-spython --follow --gpu --cpu 2 --mem 32 --time 24 \
-  scripts/create_data_with_summaries.py \
-  --model /blue/data/ai/models/nlp/llama/models_llama3/Meta-Llama-3-8B-Instruct-hf \
-  --input_file data/train.csv \
-  --output_file data/train.csv
+python scripts/validate_prepared_data.py
 ```
+
+Validation passed with no blank summaries, duplicate IDs, malformed lab fields,
+malformed radiology fields, invalid labels, or cross-split overlap.
+
+## Current Work
+
+The next milestone is a two-patient zero-shot evaluation smoke test:
+
+```bash
+sbatch slurm/zero_shot_smoke.sbatch
+```
+
+The first smoke attempt exposed and led to fixes for:
+
+- Duplicate `itemid` aliases in the generated lab mapping
+- RTX PRO 6000 Blackwell (`sm_120`) incompatibility with pinned PyTorch 2.6
+- Implicit Accelerate defaults and incomplete Hydra tracebacks
+
+The revised job requests two L4 GPUs. Transformers uses GPU 0 and vLLM uses
+GPU 1.
 
 ## Environment Notes
 
@@ -140,6 +161,12 @@ The cohort-building Conda environment is:
 
 ```text
 /home/omerkahveci/.conda/envs/mimic-cdm
+```
+
+The separate LA-CDM evaluation/training environment is stored on Blue:
+
+```text
+/blue/prismap-ai-core/omerkahveci/envs/la-cdm
 ```
 
 Important compatible package versions currently used include:
@@ -152,76 +179,42 @@ accelerate==1.5.2
 bitsandbytes==0.50.2
 ```
 
+The LA-CDM environment was updated to a mutually compatible vLLM stack:
+
+```text
+vllm==0.8.3
+xgrammar==0.1.17
+transformers==4.51.0
+huggingface-hub==0.30.2
+numba==0.61.0
+llvmlite==0.44.0
+```
+
 `bitsandbytes >= 0.48.0` is required for the HiPerGator PyTorch CUDA 13 build.
 The old submodule `requirements.txt` should not be installed as a whole because
 it contains conflicting dependency pins.
 
-The custom `spython` wrapper supports `--gpu`, which requests:
-
-```text
---gres=gpu:1
-```
-
-Use `--follow` on all future `spython` commands.
+Large environments and Conda package caches must be stored on Blue because the
+home quota is insufficient. Use `--no-cache-dir` for large pip installs.
 
 ## Next Steps
 
-### 1. Verify training summaries
+### 1. Complete the zero-shot smoke evaluation
 
-```bash
-python -c "import pandas as pd; d=pd.read_csv('data/train.csv'); print(d['Patient History Summary'].notna().sum(), len(d))"
-```
+Run `slurm/zero_shot_smoke.sbatch`, inspect both log files, and confirm that
+metrics are written for two test cases.
 
-Expected result:
-
-```text
-1920 1920
-```
-
-### 2. Summarize validation histories
-
-```bash
-spython --follow --gpu --cpu 2 --mem 32 --time 4 \
-  scripts/create_data_with_summaries.py \
-  --model /blue/data/ai/models/nlp/llama/models_llama3/Meta-Llama-3-8B-Instruct-hf \
-  --input_file data/val.csv \
-  --output_file data/val.csv
-```
-
-### 3. Summarize test histories
-
-```bash
-spython --follow --gpu --cpu 2 --mem 32 --time 4 \
-  scripts/create_data_with_summaries.py \
-  --model /blue/data/ai/models/nlp/llama/models_llama3/Meta-Llama-3-8B-Instruct-hf \
-  --input_file data/test.csv \
-  --output_file data/test.csv
-```
-
-### 4. Validate prepared data
-
-Confirm that every split has a nonempty `Patient History Summary`, valid labels,
-parseable lab/radiology fields, no duplicate admissions, and no cross-split
-overlap. A dedicated prepared-data validation script should be added before
-training.
-
-### 5. Run a small zero-shot smoke evaluation
-
-Use `dataset.small_sample=true` and disable Weights & Biases initially. Confirm
-that Llama follows the agent response format and that vLLM, the environment,
-and metrics all run successfully.
-
-### 6. Run the full zero-shot baseline
+### 2. Run the full zero-shot baseline
 
 Record diagnostic accuracy, diagnostic cost, requested tests, interaction
 length, formatting failures, and per-disease performance.
 
-### 7. Run a short training smoke test
+### 3. Run a short training smoke test
 
 Confirm LoRA attachment, forward/backward passes, checkpoint creation, adapter
 loading, and GPU memory usage before requesting a full training allocation.
 
-### 8. Run full training and evaluation
+### 4. Run full training and evaluation
 
 Required experiments:
 
@@ -233,4 +226,3 @@ Required experiments:
 The Llama results reproduce the LA-CDM method and protocol, not the paper's
 exact Qwen result. Compare each trained Llama run primarily against the same
 Llama zero-shot baseline.
-
