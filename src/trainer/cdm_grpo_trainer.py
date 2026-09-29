@@ -550,7 +550,7 @@ class CDMGRPOTrainer(GRPOTrainer):
         )
         rewards_ha_conf_cal = torch.tensor(rewards_ha_conf_cal, dtype=torch.float32, device=device)
         mean_grouped = rewards_ha_conf_cal.view(-1, num_generation_ha).mean(dim=1)
-        std_grouped = rewards_ha_conf_cal.view(-1, num_generation_ha).std(dim=1)
+        std_grouped = rewards_ha_conf_cal.view(-1, num_generation_ha).std(dim=1, correction=0)
         mean_grouped = mean_grouped.repeat_interleave(num_generation_ha, dim=0)
         std_grouped = std_grouped.repeat_interleave(num_generation_ha, dim=0)
         ha_conf_cal_advantages = (rewards_ha_conf_cal - mean_grouped) / (std_grouped + 1e-4)
@@ -640,7 +640,7 @@ class CDMGRPOTrainer(GRPOTrainer):
         rewards = (rewards_per_func * self.reward_weights.to(device).unsqueeze(0)).sum(dim=1)
 
         mean_grouped_rewards = rewards.view(-1, self.num_generations).mean(dim=1)
-        std_grouped_rewards = rewards.view(-1, self.num_generations).std(dim=1)
+        std_grouped_rewards = rewards.view(-1, self.num_generations).std(dim=1, correction=0)
         mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
         std_grouped_rewards = std_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
         advantages = (rewards - mean_grouped_rewards) / (std_grouped_rewards + 1e-4)

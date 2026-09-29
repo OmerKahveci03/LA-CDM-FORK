@@ -215,6 +215,10 @@ the EOS token for padding and propagates its ID to the model configuration.
 The next run passed tokenization and exposed an unconditional PEFT
 `disable_adapter()` call during zero-shot evaluation. The trainer now uses that
 context only when the loaded model actually has a PEFT adapter.
+The following run completed inference for both smoke-test cases. It then failed
+only while saving because `evaluation.metrics_output_file` was unset. Evaluation
+now defaults to Hydra's run directory as `metrics.json`. Single-generation
+reward normalization also uses population standard deviation to avoid NaNs.
 
 ### 2. Run the full zero-shot baseline
 

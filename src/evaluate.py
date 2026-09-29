@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 
 import hydra
 import wandb
@@ -59,9 +60,10 @@ def main(cfg: DictConfig):
     metrics = trainer.evaluate(eval_dataset="test")
 
     # Persist metrics
-    metrics_path = cfg.evaluation.metrics_output_file
-    os.makedirs(os.path.dirname(metrics_path), exist_ok=True)
-    with open(metrics_path, "w") as f:
+    configured_metrics_path = cfg.evaluation.metrics_output_file
+    metrics_path = Path(configured_metrics_path) if configured_metrics_path else Path(output_dir) / "metrics.json"
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    with metrics_path.open("w") as f:
         json.dump(metrics, f, indent=2)
 
     wandb.log({"test_metrics": metrics})
