@@ -225,6 +225,9 @@ pyrightconfig.json
 .hydra
 outputs/
 logs/
+!logs/
+logs/*
+!logs/.gitkeep
 wandb/
 !configs/wandb/
 notebooks/test.py

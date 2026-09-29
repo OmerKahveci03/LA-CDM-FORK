@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=lacdm-smoke
-#SBATCH --output=/home/omerkahveci/spython_logs/lacdm_smoke_%j.out
-#SBATCH --error=/home/omerkahveci/spython_logs/lacdm_smoke_%j.err
+#SBATCH --output=logs/lacdm_smoke_%j.out
+#SBATCH --error=logs/lacdm_smoke_%j.err
 #SBATCH --account=cai6734
 #SBATCH --partition=hpg-rtx6000
 #SBATCH --gres=gpu:1
