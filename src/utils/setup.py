@@ -190,7 +190,11 @@ def configure_grpo(cfg: DictConfig, eval_only: bool = False) -> GRPOConfig:
             num_generations=1,
             max_completion_length=cfg.training.max_completion_length,
             max_prompt_length=cfg.training.max_prompt_length,
-            temperature=getattr(cfg.training, "temperature", 1.0),
+            # Evaluation should be repeatable. Training retains stochastic
+            # sampling through its normal GRPO configuration.
+            # vLLM clamps smaller positive values to 0.01. Combined with the
+            # fixed seed, this gives repeatable near-greedy evaluation.
+            temperature=0.01,
             bf16=cfg.training.bf16,
             bf16_full_eval=cfg.training.bf16_full_eval,
             use_vllm=cfg.training.use_vllm,

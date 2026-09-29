@@ -302,6 +302,7 @@ class CDMGRPOTrainer(GRPOTrainer):
                         # This is particularly useful here because we generate completions from the same prompts.
                         enable_prefix_caching=True,
                         max_model_len=self.args.vllm_max_model_len,
+                        seed=self.args.seed,
                     )
                 self.sampling_params = SamplingParams(
                     temperature=args.temperature,

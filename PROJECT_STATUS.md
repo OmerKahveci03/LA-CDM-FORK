@@ -202,10 +202,9 @@ home quota is insufficient. Use `--no-cache-dir` for large pip installs.
 
 ## Next Steps
 
-### 1. Inspect the smoke-test metrics
+### 1. Smoke-test evaluation (complete)
 
-Locate the newest Hydra `metrics.json` file and confirm that all values are
-finite and structurally complete before starting the full evaluation.
+The smoke-test metrics are finite and structurally complete.
 
 The two-L4 run successfully loaded both the Transformers and vLLM model copies
 and completed CUDA graph capture, confirming that the current GPU and host-memory
@@ -232,11 +231,36 @@ unparsed (`eval_none_fraction=1.0`, `FormatReward=0`). The action parser was
 written for exact Qwen-style plain-text labels. It now accepts Llama's cosmetic
 Markdown, indentation, whitespace, and trailing-period variations while still
 requiring the three action fields and validating actions against the allowlists.
+That tolerance change did not alter the two-case result. Targeted warnings were
+therefore added for invalid format, unknown action, unknown test, and unknown
+diagnosis cases. The next smoke log will include the raw invalid completion so
+the remaining Llama incompatibility can be fixed from evidence.
+The diagnostic run showed that Llama ended its turn before emitting the required
+action: one second-step completion was empty and another contained only a
+`Thought`. The 256-token limit was not exhausted. Decision-agent generation now
+ignores early EOS/end-of-turn tokens while retaining the `Observation:` stop;
+hypothesis and confidence-calibration generation keep normal EOS behavior.
+The resulting log showed actions followed by literal Llama `<|eot_id|>` and
+assistant-header tokens, confirming that forcing generation beyond EOS was
+creating artificial extra turns. The parser still accepts ordinary prose
+reasoning followed by valid `Action` and `Action Input` fields, since Llama does
+not always label its reasoning as `Thought:`.
+Further testing showed that forcing generation beyond EOS creates synthetic
+chat headers and malformed actions, so that workaround was removed. Zero-shot
+evaluation now uses repeatable near-greedy decoding (`temperature=0.01`) and
+passes the configured seed into vLLM. Early termination and invalid actions are retained as genuine
+baseline failures instead of being coerced into valid responses.
+The final deterministic smoke run completed successfully. Both cases requested
+CT and then ended after a `Thought` without emitting another action. These are
+measured as undiagnosed zero-shot failures rather than pipeline errors. The
+full 240-case job is `slurm/zero_shot_full.sbatch`; it uses two L4 GPUs and 64
+GB of RAM and writes job-specific metrics under `outputs/`.
 
 ### 2. Run the full zero-shot baseline
 
-Record diagnostic accuracy, diagnostic cost, requested tests, interaction
-length, formatting failures, and per-disease performance.
+Submit `slurm/zero_shot_full.sbatch` and record diagnostic accuracy, diagnostic
+cost, requested tests, interaction length, formatting failures, and per-disease
+performance.
 
 ### 3. Run a short training smoke test
 

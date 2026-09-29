@@ -1,5 +1,6 @@
 import re
 import random
+import logging
 from dataclasses import dataclass, field
 from trl.data_utils import maybe_apply_chat_template
 
@@ -59,7 +60,9 @@ class Trajectory:
         # trailing eos token (the eos marks the end of the whole dialogue), but
         # for test actions we remove it so that the environment can continue
         # appending text.
-        is_diagnosis_action = bool(re.search(r"action:\s*diagnosis", completion_text_raw, flags=re.IGNORECASE))
+        is_diagnosis_action = bool(
+            re.search(r"(?:\*\*)?action(?:\*\*)?\s*:\s*diagnosis", completion_text_raw, flags=re.IGNORECASE)
+        )
 
         # Optionally strip eos for non-diagnosis actions
         if (
@@ -187,19 +190,32 @@ class Environment:
         # ``**Action:**``) or add indentation. Accept those cosmetic changes,
         # while still requiring all three fields in the expected order.
         label = lambda name: rf"\s*(?:\*\*)?{name}(?:\*\*)?\s*:\s*"
-        pattern = (
+        full_pattern = (
             rf"{label('Thought')}(.*?)\r?\n+"
             rf"{label('Action')}([^\r\n]+)\r?\n+"
             rf"{label('Action Input')}([^\r\n]+)"
         )
-
-        match = re.search(pattern, trajectory.last_completion, flags=re.IGNORECASE | re.DOTALL)
+        match = re.search(full_pattern, trajectory.last_completion, flags=re.IGNORECASE | re.DOTALL)
         if match:
             _, action, action_input = match.groups()
+        else:
+            # Llama sometimes writes its reasoning as ordinary prose instead
+            # of prefixing it with ``Thought:``, while still providing the two
+            # machine-actionable fields correctly.
+            action_pattern = (
+                rf"{label('Action')}([^\r\n]+)\r?\n+"
+                rf"{label('Action Input')}([^\r\n]+)"
+            )
+            match = re.search(action_pattern, trajectory.last_completion, flags=re.IGNORECASE)
+            if not match:
+                return False, None, None
+            action, action_input = match.groups()
+
+        if match:
             action = action.strip().strip("*[]").strip().rstrip(".").lower()
             action_input = action_input.strip().strip("*[]").strip().rstrip(".").lower()
             return True, action, action_input
-        
+
         return False, None, None
       
     def run(self, prompts_text: list[str], inputs: list[dict], model, sampling_params, processing_class) -> EnvironmentOutput:
@@ -326,16 +342,23 @@ class Environment:
         valid, action, action_input = self.parse_actions_and_check_validity(trajectory)
         
         if not valid:
+            logging.warning(
+                "Invalid model action format at environment step %s: %r",
+                step,
+                trajectory.last_completion,
+            )
             trajectory.complete(invalid=True)
             return
     
         # 2. If the action is unknown, add response asking for repeat.
         if action not in [action.lower() for action in self.possible_actions]:
+            logging.warning("Unknown model action %r at environment step %s", action, step)
             observation = "\nError: Unknown action. Valid actions are: " + ", ".join(self.possible_actions) + "." + "\n\n---\n"
             trajectory.error = True
         elif action == "test":
             # 3. If the action is known, check if the action input is valid.
             if action_input not in [test.lower() for test in self.test_list]:
+                logging.warning("Unknown test action input %r at environment step %s", action_input, step)
                 observation = "\nError: Unknown test. Only request tests as given above." + "\n\n---\n"
                 trajectory.error = True
             else:
@@ -347,6 +370,7 @@ class Environment:
         elif action == "diagnosis":
             # 3. If the action is known, check if the action input is valid.
             if action_input not in [disease.lower() for disease in self.disease_list]:
+                logging.warning("Unknown diagnosis action input %r at environment step %s", action_input, step)
                 observation = "\nError: Unknown diagnosis. Valid diagnoses are: " + ", ".join(self.disease_list) + "." + "\n\n---\n"
                 trajectory.error = True
             else:
