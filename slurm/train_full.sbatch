@@ -8,7 +8,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=64G
-#SBATCH --time=16:00:00
+#SBATCH --time=24:00:00
 
 set -euo pipefail
 
@@ -35,9 +35,10 @@ echo "[SLURM] Output: $RUN_DIR"
     -m src.train \
     hydra.run.dir="$RUN_DIR" \
     dataset.small_sample=false \
-    training.max_steps=-1 \
+    training.max_steps=300 \
     training.num_generations=8 \
-    training.per_device_train_batch_size=2 \
+    training.per_device_train_batch_size=1 \
+    training.save_steps=25 \
     training.vllm_gpu_memory_utilization=0.9 \
     wandb.mode=disabled
 

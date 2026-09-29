@@ -300,9 +300,17 @@ eight and OOMed while Accelerate converted a 3.69-GiB logits tensor to FP32.
 The production configuration uses eight GRPO generations split into four
 microbatches of two; the scale-smoke job now matches that configuration.
 The corrected scale run (`43934814`) completed successfully with finite loss
-and gradients. Full training is ready in `slurm/train_full.sbatch`: 480 steps
-over two epochs, checkpoints every 100 steps, two L4 GPUs, 64 GB RAM, and a
-16-hour wall-time allocation.
+and gradients. The first long run (`43935802`) subsequently OOMed at step five
+on a longer trajectory. It also revealed that two nominal epochs correspond to
+3,840 GRPO steps (about 75 hours), not the previously estimated 480 steps. The
+revised `slurm/train_full.sbatch` runs one complete 300-step loss-schedule cycle
+(100 DA, 100 HA-SFT, and 100 HA-confidence-calibration steps), uses memory-safe
+microbatches of one, and requests 24 hours.
+Run `43942475` reached step 26 before a long trajectory caused an OOM during
+the pre-microbatch reference-log-probability calculation across all eight
+generations. Reference log probabilities are now computed in no-gradient
+chunks of one for both Decision Agent and confidence-calibration losses.
+Checkpoint frequency was increased from every 100 steps to every 25 steps.
 
 ### 4. Run full training and evaluation
 

@@ -539,7 +539,7 @@ class CDMGRPOTrainer(GRPOTrainer):
                     else nullcontext()
                 )
                 with adapter_context:
-                    ha_conf_cal_ref_per_token_logps = self._get_per_token_logps(
+                    ha_conf_cal_ref_per_token_logps = self._get_per_token_logps_in_chunks(
                         self.model, ha_conf_cal_prompt_completion_ids, ha_conf_cal_attention_mask, logits_to_keep,
                     )
 
@@ -595,7 +595,7 @@ class CDMGRPOTrainer(GRPOTrainer):
                     else nullcontext()
                 )
                 with adapter_context:
-                    ref_per_token_logps = self._get_per_token_logps(
+                    ref_per_token_logps = self._get_per_token_logps_in_chunks(
                         self.model, prompt_completion_ids, attention_mask, logits_to_keep,
                     )
 
@@ -1024,6 +1024,26 @@ class CDMGRPOTrainer(GRPOTrainer):
         # See https://github.com/huggingface/trl/issues/2770
         logits = logits[:, -logits_to_keep:]
         return selective_log_softmax(logits, input_ids)  #  compute logprobs for the input tokens
+
+    def _get_per_token_logps_in_chunks(
+        self, model, input_ids, attention_mask, logits_to_keep, chunk_size=1
+    ):
+        """Compute no-gradient reference log probabilities in memory-safe chunks."""
+        if input_ids.size(0) <= chunk_size:
+            return self._get_per_token_logps(model, input_ids, attention_mask, logits_to_keep)
+
+        chunks = []
+        for start in range(0, input_ids.size(0), chunk_size):
+            stop = start + chunk_size
+            chunks.append(
+                self._get_per_token_logps(
+                    model,
+                    input_ids[start:stop],
+                    attention_mask[start:stop],
+                    logits_to_keep,
+                )
+            )
+        return torch.cat(chunks, dim=0)
     
     def _move_model_to_vllm(self):
         with unwrap_model_for_generation(

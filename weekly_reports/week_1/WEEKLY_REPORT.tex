@@ -1,0 +1,253 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\title{Weekly Progress Report: Reproducing LA-CDM with Llama on MIMIC-IV}
+\author{Omer Kahveci}
+\date{September 2026}
+
+\begin{document}
+
+\maketitle
+
+\section{Project Objective}
+
+The objective of this project is to reproduce the Language Agent Clinical
+Decision-Making (LA-CDM) pipeline using MIMIC-IV clinical data. The original
+pipeline was adapted to use Meta-Llama-3-8B-Instruct instead of Qwen because
+the required Chinese-developed models are not available for use on HiPerGator.
+Consequently, this work is a methodological reproduction of LA-CDM rather than
+an exact reproduction of the paper's model-specific results.
+
+\section{Cohort Construction}
+
+The source data were MIMIC-IV version 2.2 and MIMIC-IV-Note version 2.2. A
+candidate cohort was extracted for four acute abdominal conditions:
+appendicitis, cholecystitis, diverticulitis, and pancreatitis. The extracted
+tables were then processed using the official MIMIC Clinical Decision-Making
+Dataset construction code.
+
+The candidate extraction contained 12,441 admissions from 9,336 unique
+patients. The official cohort builder reduced this set to 2,400 eligible
+admissions. Table~\ref{tab:cohort} reports the final validated cohort.
+
+\begin{table}[ht]
+    \centering
+    \caption{Final cohort composition.}
+    \label{tab:cohort}
+    \begin{tabular}{lr}
+        \toprule
+        Condition & Cases \\
+        \midrule
+        Appendicitis & 957 \\
+        Cholecystitis & 648 \\
+        Diverticulitis & 257 \\
+        Pancreatitis & 538 \\
+        \midrule
+        \textbf{Total} & \textbf{2,400} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Validation confirmed that the cohort contained no invalid records, diagnosis
+leakage, or overlap in admission identifiers between disease groups. Every
+case contained a patient history, physical examination, laboratory data, and
+abdominal imaging. The laboratory mapping contained 1,104 rows.
+
+\section{Dataset Preparation}
+
+The cohort was divided into patient-level training, validation, and test sets,
+as shown in Table~\ref{tab:splits}. Meta-Llama-3-8B-Instruct was then used to
+create deterministic summaries of all 2,400 patient histories. Summary
+generation was made resumable and checkpointed after every 25 newly completed
+rows.
+
+\begin{table}[ht]
+    \centering
+    \caption{Dataset split sizes.}
+    \label{tab:splits}
+    \begin{tabular}{lr}
+        \toprule
+        Split & Cases \\
+        \midrule
+        Training & 1,920 \\
+        Validation & 240 \\
+        Test & 240 \\
+        \midrule
+        \textbf{Total} & \textbf{2,400} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+The prepared data passed validation with no blank summaries, duplicate
+admission identifiers, malformed laboratory fields, malformed radiology
+fields, invalid labels, or overlap between splits.
+
+\section{Computing and Model Configuration}
+
+Experiments were conducted on HiPerGator using two NVIDIA L4 GPUs and 64~GB of
+system memory. One GPU hosts the trainable Transformers model, while the second
+hosts the vLLM inference engine. The model is Meta-Llama-3-8B-Instruct in local
+Transformers format. Training uses bfloat16 and LoRA adapters with rank 8,
+scaling parameter 16, and dropout 0.1.
+
+The production GRPO configuration generates eight trajectories per example.
+The eight generations are divided into sequential microbatches for the forward
+and backward passes. Production training uses a microbatch size of one after a
+longer trajectory exceeded L4 memory with a microbatch size of two. This preserves the required GRPO comparison
+group while remaining within the 22~GB memory capacity of each L4 GPU.
+
+\section{Engineering and Reproducibility Work}
+
+Several changes were required to run the original pipeline reliably with
+Llama and the HiPerGator software environment:
+
+\begin{itemize}
+    \item Created compatible dependency pins for PyTorch, vLLM, Transformers,
+          XGrammar, Numba, and LLVMlite.
+    \item Moved the Conda environment and package cache to Blue storage after
+          the home filesystem quota was exhausted.
+    \item Added ordered extraction, construction, and validation scripts.
+    \item Added Slurm jobs with job-specific logs and output directories.
+    \item Corrected duplicate aliases and missing synonym rows in the generated
+          laboratory-test mapping.
+    \item Configured the Llama EOS token for padding.
+    \item Removed an unnecessary reference-model copy during evaluation, which
+          eliminated a full model's worth of GPU memory use.
+    \item Updated the action parser to tolerate cosmetic Llama formatting while
+          continuing to validate actions against strict test and disease lists.
+    \item Corrected the evaluation pipeline so custom accuracy, calibration,
+          reward, test-count, and diagnostic-cost metrics are saved.
+    \item Made evaluation repeatable by supplying a fixed vLLM seed and using
+          near-greedy decoding with temperature 0.01.
+\end{itemize}
+
+\section{Zero-Shot Baseline}
+
+The full zero-shot evaluation covered all 240 held-out test cases and completed
+in 2,540.7 seconds, or approximately 42.3 minutes. The results are summarized
+in Table~\ref{tab:baseline}.
+
+\begin{table}[ht]
+    \centering
+    \caption{Meta-Llama-3-8B-Instruct zero-shot baseline results.}
+    \label{tab:baseline}
+    \begin{tabular}{lr}
+        \toprule
+        Metric & Result \\
+        \midrule
+        Overall diagnostic accuracy & 8.75\% \\
+        Undiagnosed or invalid fraction & 87.92\% \\
+        Accuracy among completed diagnoses & 72.41\% \\
+        Macro F1, all cases & 15.54\% \\
+        Macro F1, completed diagnoses only & 68.50\% \\
+        Hypothesis-agent accuracy & 65.25\% \\
+        Expected calibration error & 10.87\% \\
+        Average tests requested & 1.16 \\
+        Average diagnostic cost & \$798.08 \\
+        Evaluation runtime & 42.3 minutes \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Table~\ref{tab:disease} reports disease-specific zero-shot performance when
+undiagnosed cases are counted as incorrect.
+
+\begin{table}[ht]
+    \centering
+    \caption{Zero-shot performance by diagnosis.}
+    \label{tab:disease}
+    \begin{tabular}{lrrrr}
+        \toprule
+        Condition & Support & Precision & Recall & F1 \\
+        \midrule
+        Appendicitis & 96 & 1.000 & 0.104 & 0.189 \\
+        Cholecystitis & 65 & 0.800 & 0.062 & 0.114 \\
+        Diverticulitis & 25 & 0.429 & 0.120 & 0.188 \\
+        Pancreatitis & 54 & 0.571 & 0.074 & 0.131 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+The main zero-shot limitation was protocol completion rather than diagnostic
+discrimination. Llama frequently requested an appropriate initial test and
+produced clinically relevant reasoning, but then ended its response before
+emitting the required \texttt{Action} and \texttt{Action Input} fields. Among
+the 29 cases for which a valid diagnosis was completed, accuracy was 72.41\%.
+However, the high undiagnosed fraction reduced overall accuracy to 8.75\%.
+
+\section{Training Validation}
+
+The training pipeline was tested incrementally before requesting a full
+allocation. A two-step LoRA smoke test completed successfully with finite
+losses and gradients, and KL divergence became nonzero after the first update.
+The resulting adapter was saved and successfully reloaded for inference through
+vLLM.
+
+An initial production-scale test produced an out-of-memory error because its
+temporary job configuration incorrectly set the forward microbatch size to
+eight. After restoring the intended microbatch size of two, a one-step test
+with all eight GRPO generations completed successfully. This verified the
+production memory configuration.
+
+An attempted two-epoch run revealed that the custom GRPO sampler expands this
+configuration to 3,840 optimization steps, with an estimated runtime of about
+75 hours. It also exceeded L4 memory on a longer trajectory at step five. The
+revised training job therefore runs one complete 300-step schedule cycle: 100
+Decision Agent GRPO steps, 100 Hypothesis Agent supervised fine-tuning steps,
+and 100 Hypothesis Agent confidence-calibration GRPO steps. It uses
+microbatches of one. A later long trajectory exposed a second memory peak in
+the reference-log-probability calculation, which originally processed all
+eight trajectories simultaneously. That no-gradient calculation is now also
+chunked one trajectory at a time. Checkpoints are written every 25 steps.
+
+\section{Problems and Resolutions}
+
+\begin{table}[ht]
+    \centering
+    \caption{Major implementation problems and resolutions.}
+    \label{tab:problems}
+    \begin{tabular}{>{\raggedright\arraybackslash}p{0.35\textwidth}
+                    >{\raggedright\arraybackslash}p{0.55\textwidth}}
+        \toprule
+        Problem & Resolution \\
+        \midrule
+        Conflicting package requirements & Constructed a mutually compatible,
+        pinned environment instead of installing the original requirements
+        file unchanged. \\
+        Home filesystem quota exhausted & Stored the environment and package
+        caches on Blue storage. \\
+        PyTorch incompatible with Blackwell GPU architecture & Requested L4
+        GPUs supported by the installed PyTorch build. \\
+        Evaluation GPU out-of-memory & Removed the unnecessary reference-model
+        copy and placed Transformers and vLLM on separate GPUs. \\
+        Missing Llama padding token & Assigned the EOS token as the padding
+        token and propagated its identifier to the model configuration. \\
+        Qwen-specific output parsing & Added controlled tolerance for Markdown,
+        whitespace, and prose reasoning while retaining action allowlists. \\
+        Missing diagnostic metrics & Updated the Trainer-owned metrics mapping
+        in place so custom metrics are returned and saved. \\
+        Eight-generation training OOM & Used sequential microbatches of one
+        while retaining all eight generations in each GRPO group. \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\section{Next Steps}
+
+The immediate next step is to complete the full LA-CDM LoRA training run and
+evaluate the final adapter on the unchanged 240-case test set. The trained
+model will be compared with the Llama zero-shot baseline using diagnostic
+accuracy, protocol-completion rate, macro F1, calibration error, test count,
+and diagnostic cost.
+
+Two ablation experiments are also planned: a Decision-Agent-only configuration
+and an LA-CDM configuration without the test-cost reward. These comparisons
+will help determine whether the Hypothesis Agent and cost-sensitive reward
+improve accuracy, protocol adherence, calibration, or resource use.
+
+\end{document}
