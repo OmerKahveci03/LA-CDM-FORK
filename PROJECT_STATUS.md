@@ -140,7 +140,7 @@ malformed radiology fields, invalid labels, or cross-split overlap.
 
 ## Current Work
 
-The next milestone is a two-patient zero-shot evaluation smoke test:
+The two-patient zero-shot evaluation smoke test is complete:
 
 ```bash
 sbatch slurm/zero_shot_smoke.sbatch
@@ -202,10 +202,10 @@ home quota is insufficient. Use `--no-cache-dir` for large pip installs.
 
 ## Next Steps
 
-### 1. Complete the zero-shot smoke evaluation
+### 1. Inspect the smoke-test metrics
 
-Run `slurm/zero_shot_smoke.sbatch`, inspect both log files, and confirm that
-metrics are written for two test cases.
+Locate the newest Hydra `metrics.json` file and confirm that all values are
+finite and structurally complete before starting the full evaluation.
 
 The two-L4 run successfully loaded both the Transformers and vLLM model copies
 and completed CUDA graph capture, confirming that the current GPU and host-memory
@@ -219,6 +219,14 @@ The following run completed inference for both smoke-test cases. It then failed
 only while saving because `evaluation.metrics_output_file` was unset. Evaluation
 now defaults to Hydra's run directory as `metrics.json`. Single-generation
 reward normalization also uses population standard deviation to avoid NaNs.
+The final smoke run completed without a traceback on September 29, 2026. Both
+model copies loaded on separate L4 GPUs, CUDA graph capture completed, both
+cases were evaluated, and the metrics file was written.
+Inspection showed that the first successful `metrics.json` contained only the
+standard Trainer loss and timing fields. The custom trainer had copied the log
+dictionary before adding diagnostic metrics, so `evaluate()` could not return
+them to the save step. It now updates the Trainer-owned dictionary in place so
+accuracy, calibration, reward, test-count, and diagnostic-cost fields are saved.
 
 ### 2. Run the full zero-shot baseline
 

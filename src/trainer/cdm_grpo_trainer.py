@@ -1074,8 +1074,9 @@ class CDMGRPOTrainer(GRPOTrainer):
         if is_eval:
             metrics = {f"eval_{k}": v for k, v in metrics.items()}
 
-        # merge
-        logs = {**logs, **metrics}
+        # Mutate the Trainer-owned metrics dictionary so evaluate() returns the
+        # custom metrics as well as sending them to callbacks/reporters.
+        logs.update(metrics)
 
         if is_eval:
             # — every evaluation run —
