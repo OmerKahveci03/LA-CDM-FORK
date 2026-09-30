@@ -1,0 +1,68 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\title{CAI6734 Weekly Report 1}
+\author{Omer Kahveci}
+\date{September 29, 2026}
+
+\begin{document}
+
+\maketitle
+
+\section{Project Objective}
+The goal of this project is to train a search agent capable of navigating structured EHR data. This week's scope was 
+to reproduce the methodology presented in the LA-CDM paper~\cite{baniharouni2025language}. The goal of this task was to 
+improve our understanding of how a pre-trained model can be adapted to support clinical decision-making.
+
+The paper fine-tuned a pre-trained Qwen model using Low-Rank Adaptation (LoRA), a parameter-efficient method that
+freezes the original model weights and trains a smaller set of adapter parameters. These adapters were optimized
+using supervised fine-tuning and Group Relative Policy Optimization (GRPO) to improve hypothesis generation,
+confidence calibration, and diagnostic decision-making.
+
+The model was trained and evaluated on a cohort of 2,400 MIMIC-IV admissions across four acute abdominal conditions: 
+appendicitis, cholecystitis, diverticulitis, and pancreatitis. The cohort was divided into 1,920 training cases, 240 
+validation cases, and 240 test cases.
+
+\section{Accomplishments}
+
+I obtained credentialed access to MIMIC-IV and used version 2.2 of the dataset on HiPerGator to reproduce the study's 
+methodology. I used Meta-Llama-3-8B-Instruct in place of Qwen because Chinese-developed models were not permitted on 
+HiPerGator. Since the paper's codebase was open source, I was able to clone it and save a copy on my personal account.
+
+I modified the original LA-CDM codebase to support Llama and the HiPerGator environment. These changes included 
+replacing Qwen-specific model paths, resolving dependency conflicts, adding Slurm job scripts, adapting the output
+parser to Llama's response format, reducing GPU memory usage, and adding validation scripts for both the cohort and 
+prepared datasets. I also updated the evaluation pipeline to report diagnostic accuracy, calibration, test usage,
+diagnostic cost, and disease-specific performance.
+
+I extracted a cohort from MIMIC-IV and MIMIC-IV-Note version 2.2 using the same four abdominal conditions studied in 
+LA-CDM. The final validated cohort contained 2,400 admissions: 957 appendicitis cases, 648 cholecystitis cases,
+257 diverticulitis cases, and 538 pancreatitis cases. I divided the cohort into 1,920 training cases, 240 validation 
+cases, and 240 test cases. I then generated Llama-based patient-history summaries and validated the resulting files for
+missing summaries, duplicate admissions, malformed fields, diagnosis leakage, and overlap between dataset splits.
+
+Finally, I evaluated the untrained Llama model on all 240 test cases to establish a zero-shot baseline. The model 
+achieved 8.75\% overall accuracy and produced no valid final diagnosis for 87.92\% of cases. However, it achieved 
+72.41\% accuracy among the cases for which it completed a valid diagnosis. This suggests that the model's main 
+zero-shot limitation was following and completing the required interaction protocol rather than identifying the correct 
+condition. I also validated the LoRA training pipeline through short training, checkpoint, adapter-loading, and 
+production-scale memory tests in preparation for the full training run.
+
+\begin{thebibliography}{1}
+
+\bibitem{baniharouni2025language}
+David Bani-Harouni, Chantal Pellegrini, Ege {\"O}zsoy, Nassir Navab, and
+Matthias Keicher.
+\newblock Language agents for hypothesis-driven clinical decision making with
+reinforcement learning.
+\newblock In \emph{International Conference on Learning Representations}, 2026.
+\newblock \url{https://arxiv.org/abs/2506.13474}.
+
+\end{thebibliography}
+
+\end{document}

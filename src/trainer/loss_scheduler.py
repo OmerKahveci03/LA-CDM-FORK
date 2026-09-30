@@ -51,29 +51,27 @@ class LossScheduler:
         Returns:
             Tuple of ``(weights_dict, learning_rate)``.
         """
-        self.current_step += 1
-        self.steps_in_current_phase += 1
-        
-        # Check if we need to move to the next phase
-        if self.steps_in_current_phase >= self.phases[self.current_phase_idx].steps:
-            self.current_phase_idx = (self.current_phase_idx + 1) % len(self.phases)
-            self.steps_in_current_phase = 0
-            
-            # If we've completed all phases and repeat is False, keep the last phase
-            if not self.repeat and self.current_phase_idx == 0:
-                self.current_phase_idx = len(self.phases) - 1
-                self.steps_in_current_phase = self.phases[-1].steps
-        
-        # Get current phase
+        # Return the current phase for this step, then advance the schedule for
+        # the next call. This gives every configured phase exactly `steps`
+        # optimization steps (rather than switching one step early).
         current_phase = self.phases[self.current_phase_idx]
-        
-        # Set weights based on current phase
         weights = {
             "da_loss_weight": 1.0 if current_phase.name == "da" else 0.0,
             "ha_sft_loss_weight": 1.0 if current_phase.name == "ha_sft" else 0.0,
             "ha_conf_cal_loss_weight": 1.0 if current_phase.name == "ha_conf_cal" else 0.0
         }
         learning_rate = current_phase.learning_rate
+
+        self.current_step += 1
+        self.steps_in_current_phase += 1
+        if self.steps_in_current_phase >= current_phase.steps:
+            next_phase_idx = (self.current_phase_idx + 1) % len(self.phases)
+            if not self.repeat and next_phase_idx == 0:
+                self.current_phase_idx = len(self.phases) - 1
+                self.steps_in_current_phase = self.phases[-1].steps
+            else:
+                self.current_phase_idx = next_phase_idx
+                self.steps_in_current_phase = 0
         
         return weights, learning_rate
 

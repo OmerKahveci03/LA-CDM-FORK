@@ -203,7 +203,11 @@ and 100 Hypothesis Agent confidence-calibration GRPO steps. It uses
 microbatches of one. A later long trajectory exposed a second memory peak in
 the reference-log-probability calculation, which originally processed all
 eight trajectories simultaneously. That no-gradient calculation is now also
-chunked one trajectory at a time. Checkpoints are written every 25 steps.
+chunked one trajectory at a time. A subsequent run revealed that the original
+trainer computed inactive objectives despite assigning them zero loss weight.
+The trainer now executes only the scheduled objective, and supervised
+fine-tuning scores only the short target suffix rather than producing logits
+for the entire prompt. Checkpoints are written every 25 steps.
 
 \section{Problems and Resolutions}
 

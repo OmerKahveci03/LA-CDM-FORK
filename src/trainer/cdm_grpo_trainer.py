@@ -851,7 +851,8 @@ class CDMGRPOTrainer(GRPOTrainer):
         ha_label_mask = inputs["ha_label_mask"]
         ha_attention_mask = inputs["ha_attention_mask"]
 
-        total_label_tokens = ha_label_mask.sum()
+        placeholder_id = self.processing_class.encode("0", add_special_tokens=False)[0]
+        total_label_tokens = (ha_label_mask.bool() & (ha_prompt_label_ids != placeholder_id)).sum().clamp(min=1)
         accumulated_loss = torch.tensor(0.0, device=ha_prompt_label_ids.device)
 
         B = ha_prompt_label_ids.size(0)
@@ -860,20 +861,22 @@ class CDMGRPOTrainer(GRPOTrainer):
             ha_label_mask_chunk = ha_label_mask[i : i + chunk_size]
             ha_attention_mask_chunk = ha_attention_mask[i : i + chunk_size]
 
-            labels = ha_prompt_label_ids_chunk.clone()
-            # This is removing prompt tokens from the loss calculation
-            labels = labels.masked_fill(ha_label_mask_chunk == 0, -100)
-            # This is removing the confidence value from the loss calculation, since we don't have ground truth here. "0" was used as a placeholder in label generation.
-            labels = labels.masked_fill(labels == self.processing_class.encode("0", add_special_tokens=False)[0], -100)
+            score_mask = ha_label_mask_chunk.bool()
+            # Confidence "0" is a placeholder, not an SFT target.
+            score_mask = score_mask & (ha_prompt_label_ids_chunk != placeholder_id)
 
-            outputs = model(
-                input_ids=ha_prompt_label_ids_chunk,
-                attention_mask=ha_attention_mask_chunk,
-                labels=labels,
-                use_cache=False,
+            # The supervised labels form a short suffix. Score only that suffix
+            # instead of materializing full-vocabulary logits for the prompt.
+            logits_to_keep = int(ha_label_mask_chunk.sum(dim=1).max().item())
+            token_logps = self._get_per_token_logps(
+                model,
+                ha_prompt_label_ids_chunk,
+                ha_attention_mask_chunk,
+                logits_to_keep,
             )
-            chunk_loss = outputs.loss
-            chunk_tokens = ha_label_mask_chunk.sum()
+            suffix_mask = score_mask[:, -logits_to_keep:]
+            chunk_tokens = suffix_mask.sum()
+            chunk_loss = -(token_logps * suffix_mask).sum() / chunk_tokens.clamp(min=1)
 
             accumulated_loss = accumulated_loss + chunk_loss * (chunk_tokens / total_label_tokens)
 
@@ -899,18 +902,22 @@ class CDMGRPOTrainer(GRPOTrainer):
                 for param_group in self.optimizer.param_groups:
                     param_group["lr"] = learning_rate
     
-        loss_da = self._compute_loss_da(model, inputs, last_minibatch)
-        if self.environment.generate_hypothesis:
+        zero = torch.zeros((), device=self.args.device)
+
+        loss_da = (
+            self._compute_loss_da(model, inputs, last_minibatch)
+            if self.da_loss_weight != 0.0
+            else zero
+        )
+        if self.environment.generate_hypothesis and self.ha_sft_loss_weight != 0.0:
             loss_ha = self._compute_loss_ha(model, inputs, last_minibatch)
         else:
-            self.ha_sft_loss_weight = 0.0
-            loss_ha = 0.0
+            loss_ha = zero
 
-        if self.environment.generate_confidence_calibration:
+        if self.environment.generate_confidence_calibration and self.ha_conf_cal_loss_weight != 0.0:
             loss_ha_conf_cal = self._compute_loss_ha_conf_cal(model, inputs, last_minibatch)
         else:
-            self.ha_conf_cal_loss_weight = 0.0
-            loss_ha_conf_cal = 0.0
+            loss_ha_conf_cal = zero
 
         loss = self.da_loss_weight * loss_da + self.ha_sft_loss_weight * loss_ha + self.ha_conf_cal_loss_weight * loss_ha_conf_cal
         return loss

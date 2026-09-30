@@ -311,6 +311,12 @@ the pre-microbatch reference-log-probability calculation across all eight
 generations. Reference log probabilities are now computed in no-gradient
 chunks of one for both Decision Agent and confidence-calibration losses.
 Checkpoint frequency was increased from every 100 steps to every 25 steps.
+Run `43959231` reached step 90 before OOMing in the Hypothesis Agent SFT loss.
+The trainer was computing all three objectives on every step even though the
+schedule assigned zero weight to two of them. It now computes only the active
+objective. The SFT implementation also scores only its short target suffix
+instead of allocating full-vocabulary logits across the entire prompt. The
+loss scheduler was corrected so each phase receives exactly 100 steps.
 
 ### 4. Run full training and evaluation
 
