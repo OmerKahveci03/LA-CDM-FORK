@@ -1,6 +1,6 @@
 # LA-CDM Llama Reproduction Status
 
-Last updated: September 29, 2026
+Last updated: October 4, 2026
 
 ## Goal
 
@@ -330,3 +330,108 @@ Required experiments:
 The Llama results reproduce the LA-CDM method and protocol, not the paper's
 exact Qwen result. Compare each trained Llama run primarily against the same
 Llama zero-shot baseline.
+
+## Current Decision and Next Actions (October 4, 2026)
+
+The infrastructure and evaluation smoke tests are operational. The full
+zero-shot baseline is also complete and should be treated as the reference
+point for all trained-model comparisons.
+
+### Baseline interpretation
+
+The baseline has strong conditional performance but fails to complete the
+required action protocol on most cases:
+
+| Metric | Result |
+|---|---:|
+| Overall accuracy, undiagnosed counted wrong | 8.75% |
+| Undiagnosed/invalid fraction | 87.92% |
+| Accuracy among completed diagnoses | 72.41% |
+| Overall macro F1 | 15.54% |
+| Completed-diagnosis macro F1 | 68.50% |
+| Format reward | 0.1208 |
+| Diagnosis reward | 0.0875 |
+| Average tests requested | 1.16 |
+
+The primary current risk is not GPU or dataset setup. It is Llama's failure to
+consistently emit a final valid `Diagnosis` action after its reasoning and test
+requests. The `eval_ignore` metrics must not replace the all-case metrics in
+the headline results because they exclude undiagnosed cases.
+
+### Required next steps
+
+1. Inspect the raw completions and action-parser warnings from the full
+   zero-shot run. Quantify separately: empty completions, `Thought`-only
+   completions, malformed actions, unknown tests, and unknown diagnoses.
+2. Add or run a focused parser/prompt test using representative Llama
+   completions. The required final form is:
+
+   ```text
+   Action: Diagnosis
+   Action Input: appendicitis
+   ```
+
+3. Rerun the 2-case zero-shot smoke test after any prompt/parser change and
+   verify `FormatReward`, `eval_none_fraction`, and both raw action logs.
+4. Re-run the full zero-shot baseline only if the smoke test changes. Preserve
+   job-specific metrics under `outputs/` for comparison.
+5. Evaluate the existing adapter smoke checkpoint (`outputs/train_smoke_43931304/`)
+   with `slurm/adapter_smoke.sbatch` and record its metrics beside the baseline.
+6. Run `slurm/train_scale_smoke.sbatch` before any long training allocation;
+   it is the memory-safety gate for the production eight-generation setting.
+7. Start `slurm/train_full.sbatch` only after the scale smoke test passes and
+   the expected 300-step schedule/resource usage is confirmed.
+
+### Run checklist
+
+For every submitted job, record the Slurm job ID, commit hash, script name,
+GPU model, environment versions, exit state, metrics path, and any warnings.
+At minimum, capture:
+
+```bash
+git rev-parse HEAD
+scontrol show job <JOB_ID> | grep -E 'JobId=|WorkDir=|Command=|StdOut=|StdErr='
+sacct -j <JOB_ID> --format=JobID,State,ExitCode,Elapsed,MaxRSS
+```
+
+Do not start full training from a failed or stale log. Confirm that the latest
+`.out`/`.err` pair contains the current commit, successful GPU initialization,
+and a clean `[SLURM] Finished` line first.
+
+### Adapter smoke result: job 44734363
+
+The adapter from `outputs/train_smoke_43931304/` loaded, merged into vLLM, and
+completed evaluation successfully. This validates adapter loading and the
+inference path, but it is not a quality success: both smoke cases were
+undiagnosed and emitted invalid action formats.
+
+| Metric | Adapter smoke | Full zero-shot baseline |
+|---|---:|---:|
+| Undiagnosed fraction | 100.0% (2/2) | 87.92% (211/240) |
+| Format reward | 0.0000 | 0.1208 |
+| Diagnosis reward | 0.0000 | 0.0875 |
+| Overall accuracy | 0.0% | 8.75% |
+| Hypothesis accuracy | 75.0% | 65.25% |
+| Average tests requested | 1.00 | 1.16 |
+
+Because this adapter was trained for only two optimizer steps and evaluated on
+only two cases, these results are not a generalization claim. They do show
+that the smoke checkpoint should be treated as a pipeline-validation artifact,
+not as evidence of improvement. Continue with the scale smoke test to validate
+the production training configuration, then evaluate the first meaningful
+ checkpoint on the fixed 240-case test set.
+
+### Production-scale training smoke result: job 44734892
+
+The one-step, eight-generation scale smoke test passed. The production memory
+configuration completed model loading, vLLM CUDA graph capture, one training
+step, and clean Slurm termination without OOM.
+
+Observed finite training values included loss `0.0024`, gradient norm
+`0.0344`, and KL `0.00072`. The checkpointing and NCCL cleanup warnings were
+non-fatal. Invalid/unknown actions remain a model-format/allowlist issue to
+track during training evaluation, not a resource failure.
+
+The full-training gate is passed. The next experiment is
+`slurm/train_full.sbatch`; retain checkpoints every 25 steps and inspect the
+first checkpoints if memory usage or loss becomes unstable.

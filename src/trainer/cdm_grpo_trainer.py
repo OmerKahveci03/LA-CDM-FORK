@@ -942,11 +942,40 @@ class CDMGRPOTrainer(GRPOTrainer):
         if is_sagemaker_mp_enabled():
             loss_mb = smp_forward_backward(model, inputs, self.args.gradient_accumulation_steps)
             return loss_mb.reduce_mean().detach().to(self.args.device)
-        
+
+        # Only one objective is active in each scheduled phase.  _prepare_inputs
+        # must build all objective tensors because the phase is also used by the
+        # loss code, but keeping the inactive tensors alive through backward can
+        # cost several additional GiB on long trajectories.
+        active_prefixes = []
+        if self.da_loss_weight != 0.0:
+            active_prefixes.append("")
+        if self.environment.generate_hypothesis and self.ha_sft_loss_weight != 0.0:
+            active_prefixes.append("ha_prompt_")
+            active_prefixes.append("ha_label_")
+            active_prefixes.append("ha_attention_")
+        if self.environment.generate_confidence_calibration and self.ha_conf_cal_loss_weight != 0.0:
+            active_prefixes.append("ha_conf_cal_")
+
+        always_keep = {"prompt_ids", "prompt_mask"}
+        inactive_keys = []
+        for key in inputs:
+            if key in always_keep or key.startswith("ha_prompt_") or key.startswith("ha_label_") or key.startswith("ha_attention_"):
+                keep = any(prefix in {"ha_prompt_", "ha_label_", "ha_attention_"} for prefix in active_prefixes)
+            elif key.startswith("ha_conf_cal_"):
+                keep = "ha_conf_cal_" in active_prefixes
+            else:
+                keep = "" in active_prefixes
+            if not keep:
+                inactive_keys.append(key)
+        for key in inactive_keys:
+            inputs.pop(key, None)
+
         # CHANGED: Split the inputs into mini-batches
         mini_batch_size = self.args.per_device_train_batch_size * self.args.n_gpu
-        mini_batch_inputs = []
-        for i in range(inputs["prompt_ids"].shape[0] // mini_batch_size):
+        batch_count = (inputs["prompt_ids"].shape[0] + mini_batch_size - 1) // mini_batch_size
+        losses = []
+        for i in range(batch_count):
             slice_dict = {}
             for key, value in inputs.items():
                 if value is None:
@@ -954,14 +983,8 @@ class CDMGRPOTrainer(GRPOTrainer):
                     slice_dict[key] = None
                 elif isinstance(value, torch.Tensor):
                     slice_dict[key] = value[i * mini_batch_size : (i + 1) * mini_batch_size]
-            mini_batch_inputs.append(slice_dict)
-        losses = []
-
-        del inputs
-
-        # CHANGED: Iterate over the mini-batches for loss calculation and gradient backward pass
-        for i, inputs in enumerate(mini_batch_inputs):
-            last_minibatch = (i == len(mini_batch_inputs) - 1)
+            last_minibatch = (i == batch_count - 1)
+            inputs = slice_dict
             with self.compute_loss_context_manager():
                 loss = self.compute_loss(model, inputs, num_items_in_batch=num_items_in_batch, last_minibatch=last_minibatch)
 
