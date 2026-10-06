@@ -4,7 +4,7 @@
 #SBATCH --error=logs/lacdm_train_full_%j.err
 #SBATCH --account=cai6734
 #SBATCH --partition=hpg-turin
-#SBATCH --gres=gpu:l4:2
+#SBATCH --gres=gpu:a40:1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=64G
@@ -39,7 +39,7 @@ echo "[SLURM] Output: $RUN_DIR"
     training.num_generations=8 \
     training.per_device_train_batch_size=1 \
     training.save_steps=25 \
-    training.vllm_gpu_memory_utilization=0.9 \
+    training.vllm_gpu_memory_utilization=0.3 \
     wandb.mode=disabled
 
 echo "[SLURM] Finished: $(date)"
