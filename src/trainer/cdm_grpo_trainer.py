@@ -984,11 +984,10 @@ class CDMGRPOTrainer(GRPOTrainer):
                 elif isinstance(value, torch.Tensor):
                     slice_dict[key] = value[i * mini_batch_size : (i + 1) * mini_batch_size]
             last_minibatch = (i == batch_count - 1)
-            inputs = slice_dict
             with self.compute_loss_context_manager():
-                loss = self.compute_loss(model, inputs, num_items_in_batch=num_items_in_batch, last_minibatch=last_minibatch)
+                loss = self.compute_loss(model, slice_dict, num_items_in_batch=num_items_in_batch, last_minibatch=last_minibatch)
 
-            del inputs
+            del slice_dict
             if (
                 self.args.torch_empty_cache_steps is not None
                 and self.state.global_step % self.args.torch_empty_cache_steps == 0
