@@ -960,7 +960,9 @@ class CDMGRPOTrainer(GRPOTrainer):
         always_keep = {"prompt_ids", "prompt_mask"}
         inactive_keys = []
         for key in inputs:
-            if key in always_keep or key.startswith("ha_prompt_") or key.startswith("ha_label_") or key.startswith("ha_attention_"):
+            if key in always_keep:
+                keep = True
+            elif key.startswith("ha_prompt_") or key.startswith("ha_label_") or key.startswith("ha_attention_"):
                 keep = any(prefix in {"ha_prompt_", "ha_label_", "ha_attention_"} for prefix in active_prefixes)
             elif key.startswith("ha_conf_cal_"):
                 keep = "ha_conf_cal_" in active_prefixes

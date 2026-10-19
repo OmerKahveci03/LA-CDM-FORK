@@ -435,3 +435,32 @@ track during training evaluation, not a resource failure.
 The full-training gate is passed. The next experiment is
 `slurm/train_full.sbatch`; retain checkpoints every 25 steps and inspect the
 first checkpoints if memory usage or loss becomes unstable.
+
+### Full-training OOM follow-up (2026-10-19)
+
+The full-training job has encountered CUDA out-of-memory failures on long
+trajectories. Earlier failures occurred in Decision Agent reference scoring and
+Hypothesis Agent SFT scoring (jobs `43942475` and `43959231`); the one-step scale
+smoke result above does not establish memory safety for a 300-step run. The
+full job requests two L4 GPUs and 64 GB of host RAM. The failures are GPU-memory
+spikes, so increasing the Slurm `--mem` allocation alone would not address them.
+
+The current `slurm/train_full.sbatch` uses four generations, a training
+microbatch size of one, and a maximum completion length of 128. Commit
+`9f8510b` fixes the trainer loop so every microbatch slices the original
+prepared batch; previously, it replaced that batch with the first slice.
+Python compilation and `git diff --check` passed locally. The corrected loop
+and current full-job settings have not yet been validated in a cluster run.
+
+Next: run a scale smoke test matching the current full-job settings, including
+later loss phases or representative long trajectories, then submit full
+training. Record job IDs, peak GPU memory, the phase and step of any failure,
+and the `.out`/`.err` paths here for the future report.
+
+Full-training job `46744120` started vLLM CUDA graph capture, then failed at
+step 0 with `KeyError: 'prompt_ids'` in `training_step`. This was a tensor-filter
+bug, not an OOM: the cleanup for inactive objectives discarded the two prompt
+tensors that microbatch slicing always needs. The filter now retains
+`prompt_ids` and `prompt_mask` for every phase. The CUDA checkpoint warning and
+NCCL cleanup warning accompanied the exception; they are not the reported
+failure. Re-run a short training job with the fix before another 300-step job.
