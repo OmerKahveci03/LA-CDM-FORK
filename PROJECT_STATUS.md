@@ -521,3 +521,14 @@ are covered by local tests, but the full
 checkpoint load and phase transition still need cluster validation. Record the
 new job ID and confirm its first progress line and loss phase before treating
 the resumed run as valid.
+
+Resume attempt `46868613` loaded `checkpoint-150` and reached step 151, proving
+that Trainer restored the saved global step. It then failed during HA-SFT
+backward with `RuntimeError: element 0 of tensors does not require grad`.
+The HA-SFT targets have one row per distinct hypothesis prompt, while the
+microbatch loop used the four GRPO generation rows to choose its slice count.
+When HA had fewer rows, a later empty slice produced a constant loss. HA-SFT
+now batches by its own row count and weights each microbatch by its fraction of
+the full batch's supervised target tokens. Empty HA target batches are logged
+and skipped. This fix still needs a resumed cluster run through HA-SFT and the
+next phase boundary.

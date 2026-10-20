@@ -474,6 +474,13 @@ class CDMGRPOTrainer(GRPOTrainer):
         """
         if not self.environment.generate_hypothesis:
             return {"ha_prompt_label_ids": None, "ha_label_mask": None, "ha_attention_mask": None}
+        if not env_output.ha_prompt_ids:
+            empty = torch.empty((0, 0), device=device, dtype=torch.long)
+            return {
+                "ha_prompt_label_ids": empty,
+                "ha_label_mask": empty,
+                "ha_attention_mask": empty,
+            }
 
         ha_prompt_ids = [torch.tensor(ids, device=device, dtype=torch.long) for ids in env_output.ha_prompt_ids]
         ha_label_ids = [torch.tensor(ids, device=device, dtype=torch.long) for ids in env_output.ha_label_ids]
@@ -976,9 +983,24 @@ class CDMGRPOTrainer(GRPOTrainer):
         for key in inactive_keys:
             inputs.pop(key, None)
 
-        # CHANGED: Split the inputs into mini-batches
+        # HA-SFT has one row per distinct hypothesis prompt, not one row per
+        # GRPO generation. It must use its own row count for microbatching.
         mini_batch_size = self.args.per_device_train_batch_size * self.args.n_gpu
-        batch_count = (inputs["prompt_ids"].shape[0] + mini_batch_size - 1) // mini_batch_size
+        ha_sft_active = self.ha_sft_loss_weight != 0.0
+        batch_rows = inputs["ha_prompt_label_ids"].shape[0] if ha_sft_active else inputs["prompt_ids"].shape[0]
+        if batch_rows == 0:
+            self._metrics["train/skipped_empty_ha_sft"].append(1.0)
+            return torch.zeros((), device=self.args.device)
+        batch_count = (batch_rows + mini_batch_size - 1) // mini_batch_size
+        if ha_sft_active:
+            placeholder_id = self.processing_class.encode("0", add_special_tokens=False)[0]
+            ha_total_tokens = (
+                inputs["ha_label_mask"].bool()
+                & (inputs["ha_prompt_label_ids"] != placeholder_id)
+            ).sum()
+            if ha_total_tokens == 0:
+                self._metrics["train/skipped_empty_ha_sft"].append(1.0)
+                return torch.zeros((), device=self.args.device)
         losses = []
         for i in range(batch_count):
             slice_dict = {}
@@ -991,6 +1013,14 @@ class CDMGRPOTrainer(GRPOTrainer):
             last_minibatch = (i == batch_count - 1)
             with self.compute_loss_context_manager():
                 loss = self.compute_loss(model, slice_dict, num_items_in_batch=num_items_in_batch, last_minibatch=last_minibatch)
+            if ha_sft_active:
+                # _compute_loss_ha averages over this slice's target tokens;
+                # weight it so accumulated gradients equal the full-batch mean.
+                slice_tokens = (
+                    slice_dict["ha_label_mask"].bool()
+                    & (slice_dict["ha_prompt_label_ids"] != placeholder_id)
+                ).sum()
+                loss = loss * (slice_tokens / ha_total_tokens)
 
             del slice_dict
             if (
