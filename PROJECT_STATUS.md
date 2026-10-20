@@ -482,3 +482,15 @@ checkpointing effective. These changes have not yet been tested on the cluster
 and do not establish a safe memory bound for all three loss phases. Run a short
 job first, then inspect GPU memory and length-limit terminations before another
 full allocation.
+
+Full-training job `46750495` completed 160/300 optimizer steps (about 2 hours
+55 minutes), passing the earlier DA-phase OOM point and entering the HA-SFT
+phase. It then failed with `KeyError: 'ha_prompt_label_ids'` at the loss call;
+the pasted log shows no CUDA OOM. The phase scheduler changed weights inside
+`compute_loss` after `training_step` had filtered tensors according to the
+previous weights. The scheduler now advances once at the start of each training
+step, before input preparation and phase-specific filtering. This should keep
+the selected objective and its tensors aligned. The change still needs a cluster
+run that reaches both phase boundaries (DA to HA-SFT and HA-SFT to confidence
+calibration). Checkpoints should exist through step 150, subject to confirming
+the run directory on HiPerGator.

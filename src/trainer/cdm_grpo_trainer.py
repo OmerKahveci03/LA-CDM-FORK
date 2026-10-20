@@ -891,17 +891,6 @@ class CDMGRPOTrainer(GRPOTrainer):
         if return_outputs:
             raise ValueError("The GRPOTrainer does not support returning outputs")
 
-        # Update loss weights using scheduler if available
-        if self.loss_scheduler is not None and last_minibatch:
-            weights, learning_rate = self.loss_scheduler.step()
-            self.da_loss_weight = weights["da_loss_weight"]
-            self.ha_sft_loss_weight = weights["ha_sft_loss_weight"]
-            self.ha_conf_cal_loss_weight = weights["ha_conf_cal_loss_weight"]
-            # If a learning rate is provided by the scheduler, propagate it to the optimizer
-            if learning_rate is not None and hasattr(self, "optimizer") and self.optimizer is not None:
-                for param_group in self.optimizer.param_groups:
-                    param_group["lr"] = learning_rate
-    
         zero = torch.zeros((), device=self.args.device)
 
         loss_da = (
@@ -936,6 +925,18 @@ class CDMGRPOTrainer(GRPOTrainer):
         model.train()
         if hasattr(self.optimizer, "train") and callable(self.optimizer.train):
             self.optimizer.train()
+
+        # Choose the phase once per optimizer step, before filtering tensors.
+        # Changing weights inside compute_loss could select a new objective
+        # after its inputs had already been removed from the microbatch.
+        if self.loss_scheduler is not None:
+            weights, learning_rate = self.loss_scheduler.step()
+            self.da_loss_weight = weights["da_loss_weight"]
+            self.ha_sft_loss_weight = weights["ha_sft_loss_weight"]
+            self.ha_conf_cal_loss_weight = weights["ha_conf_cal_loss_weight"]
+            if learning_rate is not None and self.optimizer is not None:
+                for param_group in self.optimizer.param_groups:
+                    param_group["lr"] = learning_rate
 
         inputs = self._prepare_inputs(inputs)
 
