@@ -18,6 +18,7 @@ eval_on_start: false
 learning_rate: 1e-5
 num_train_epochs: 2
 max_steps: -1  # Positive values override num_train_epochs (used by smoke tests)
+resume_from_checkpoint: null  # Full Trainer checkpoint directory, including optimizer and trainer state
 lr_scheduler_type: "constant"
 beta: 0.04  # KL divergence weight (default is 0.04)
 loss_type: "dr_grpo" # "grpo" or "dr_grpo"

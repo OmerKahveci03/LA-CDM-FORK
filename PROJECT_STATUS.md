@@ -494,3 +494,30 @@ the selected objective and its tensors aligned. The change still needs a cluster
 run that reaches both phase boundaries (DA to HA-SFT and HA-SFT to confidence
 calibration). Checkpoints should exist through step 150, subject to confirming
 the run directory on HiPerGator.
+
+### Full-training checkpoint resume
+
+The full-job script now discovers the highest-step complete checkpoint in
+`outputs/train_full_*/checkpoint-*` automatically. It checks that
+`trainer_state.json` agrees with the directory step and that `optimizer.pt`
+exists. An explicit `RESUME_FROM_CHECKPOINT` path overrides discovery, while
+`START_FRESH=1` starts a new run. `src.train` passes the selected path to
+Hugging Face Trainer so it restores model, optimizer, learning-rate scheduler,
+RNG, and completed-step state. The custom loss scheduler derives its phase from
+the restored global step before the next training step. Each resumed Slurm job
+writes new checkpoints under its own `outputs/train_full_<JOB_ID>/` directory.
+
+On HiPerGator, after confirming the checkpoint files exist, resume the
+160-step run from its last saved step with the normal submission command:
+
+```bash
+sbatch slurm/train_full.sbatch
+```
+
+This should continue at step 151 of 300, not replay the first 150 optimizer
+steps when step 150 is the highest valid checkpoint. The script prints the
+selected path in its log. The custom phase mapping and checkpoint discovery
+are covered by local tests, but the full
+checkpoint load and phase transition still need cluster validation. Record the
+new job ID and confirm its first progress line and loss phase before treating
+the resumed run as valid.

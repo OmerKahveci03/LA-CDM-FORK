@@ -18,6 +18,22 @@ RUN_DIR="outputs/train_full_${SLURM_JOB_ID}"
 
 cd "$REPO_DIR"
 mkdir -p logs
+RESUME_ARGS=()
+if [[ "${START_FRESH:-0}" == "1" ]]; then
+    RESUME_FROM_CHECKPOINT=""
+elif [[ -z "${RESUME_FROM_CHECKPOINT:-}" ]]; then
+    RESUME_FROM_CHECKPOINT=$("$PYTHON_BIN" scripts/find_latest_training_checkpoint.py outputs --max-steps 300)
+fi
+if [[ -n "${RESUME_FROM_CHECKPOINT:-}" ]]; then
+    if [[ ! -f "$RESUME_FROM_CHECKPOINT/trainer_state.json" || ! -f "$RESUME_FROM_CHECKPOINT/optimizer.pt" ]]; then
+        echo "[SLURM] Resume checkpoint is missing trainer_state.json or optimizer.pt: $RESUME_FROM_CHECKPOINT" >&2
+        exit 1
+    fi
+    RESUME_ARGS+=("training.resume_from_checkpoint=$RESUME_FROM_CHECKPOINT")
+    echo "[SLURM] Resuming from: $RESUME_FROM_CHECKPOINT"
+else
+    echo "[SLURM] Starting from step 0 (no resume checkpoint selected)"
+fi
 export VLLM_USE_V1=0
 export HYDRA_FULL_ERROR=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -42,6 +58,7 @@ echo "[SLURM] Output: $RUN_DIR"
     environment.max_length=2048 \
     training.save_steps=25 \
     training.vllm_gpu_memory_utilization=0.9 \
+    "${RESUME_ARGS[@]}" \
     wandb.mode=disabled
 
 echo "[SLURM] Finished: $(date)"

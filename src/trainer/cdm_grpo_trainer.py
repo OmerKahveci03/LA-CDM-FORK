@@ -930,6 +930,8 @@ class CDMGRPOTrainer(GRPOTrainer):
         # Changing weights inside compute_loss could select a new objective
         # after its inputs had already been removed from the microbatch.
         if self.loss_scheduler is not None:
+            if self.loss_scheduler.current_step != self.state.global_step:
+                self.loss_scheduler.seek(self.state.global_step)
             weights, learning_rate = self.loss_scheduler.step()
             self.da_loss_weight = weights["da_loss_weight"]
             self.ha_sft_loss_weight = weights["ha_sft_loss_weight"]

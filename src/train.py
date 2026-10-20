@@ -45,7 +45,7 @@ def main(cfg: DictConfig):
         loss_schedule=cfg.training.loss_schedule if hasattr(cfg.training, "loss_schedule") else None,
     )
 
-    trainer.train()
+    trainer.train(resume_from_checkpoint=cfg.training.resume_from_checkpoint)
     trainer.save_model(cfg.training.output_dir)
     wandb.finish()
 

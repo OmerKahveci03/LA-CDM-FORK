@@ -45,6 +45,21 @@ class LossScheduler:
         for phase in self.phases:
             logging.info(f"Phase: {phase.name}, Steps: {phase.steps}")
 
+    def seek(self, completed_steps: int) -> None:
+        """Restore the next phase from Trainer's completed optimizer-step count."""
+        if completed_steps < 0:
+            raise ValueError("completed_steps must be non-negative")
+        self.current_step = completed_steps
+        position = completed_steps % self.total_steps if self.repeat else min(
+            completed_steps, self.total_steps - 1
+        )
+        for index, phase in enumerate(self.phases):
+            if position < phase.steps:
+                self.current_phase_idx = index
+                self.steps_in_current_phase = position
+                return
+            position -= phase.steps
+
     def step(self) -> tuple[dict[str, float], float | None]:
         """Advance one step and return updated loss weights and learning rate.
 
