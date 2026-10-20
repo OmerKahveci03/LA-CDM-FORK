@@ -464,3 +464,21 @@ tensors that microbatch slicing always needs. The filter now retains
 `prompt_ids` and `prompt_mask` for every phase. The CUDA checkpoint warning and
 NCCL cleanup warning accompanied the exception; they are not the reported
 failure. Re-run a short training job with the fix before another 300-step job.
+
+Full-training job `46744437` passed the step-0 failure and reached step 90/300
+in about 43 minutes, then failed with `torch.OutOfMemoryError` during backward
+on GPU 0. PyTorch reported 20.37 GiB allocated, 160 MiB reserved but unused,
+1.26 GiB free, and a failed 1.34 GiB allocation. This is a peak GPU-memory
+limit rather than substantial allocator fragmentation. The 90 completed steps
+are in the Decision Agent phase (the schedule assigns its first 100 steps to
+DA). The pasted excerpt does not include a Slurm state or peak-memory report.
+
+The RTX PRO 6000 allocation is unavailable for this class, so the full-job
+script stays on two L4 GPUs and caps environment trajectories at 2,048 tokens.
+This cap changes training behavior by ending some long cases earlier. The model
+and Trainer now both request non-reentrant gradient checkpointing to avoid the
+repeated warning about inputs without gradients and keep activation
+checkpointing effective. These changes have not yet been tested on the cluster
+and do not establish a safe memory bound for all three loss phases. Run a short
+job first, then inspect GPU memory and length-limit terminations before another
+full allocation.

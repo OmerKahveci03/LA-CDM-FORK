@@ -53,7 +53,47 @@ zero-shot limitation was following and completing the required interaction proto
 condition. I also validated the LoRA training pipeline through short training, checkpoint, adapter-loading, and 
 production-scale memory tests in preparation for the full training run.
 
-\begin{thebibliography}{1}
+The full 300-step LoRA training run is currently in progress. This run includes 100 Decision Agent reinforcement-
+learning steps, 100 Hypothesis Agent supervised fine-tuning steps, and 100 confidence-calibration reinforcement-
+learning steps. The run is expected to take several hours.
+
+\section{Challenges}
+
+One early challenge was waiting for credentialed access to the MIMIC-IV data before I could begin cohort extraction.
+I also had to replace the paper's Qwen model with Llama because Chinese-developed models are not permitted on
+HiPerGator. This required changes to model loading, prompting, output parsing, and evaluation behavior.
+
+The original project also had Python and package-version conflicts that prevented its requirements from being installed
+directly. I created a compatible environment and moved it to Blue storage after reaching my home-directory quota. GPU
+memory was another recurring challenge. Several runs failed with out-of-memory errors, so I separated model workloads
+across two GPUs and added microbatching and chunked loss calculations to reduce peak memory use.
+
+\section{Next Steps}
+
+After training is complete, I will evaluate the trained LoRA adapter on the same 240 held-out test cases used for the
+zero-shot baseline. I will compare the trained and untrained models using overall diagnostic accuracy, valid diagnosis
+rate, disease-specific precision and recall, macro F1 score, calibration error, number of requested tests, and 
+estimated diagnostic cost. This comparison will show whether training improves both diagnostic performance and
+compliance with the required clinical decision-making protocol.
+
+I will then run the planned ablation experiments, including a Decision-Agent-only model and a version trained without
+the diagnostic test-cost reward. These experiments will help determine the contribution of the Hypothesis Agent,
+confidence-calibration objective, and cost-sensitive reward to the final model's performance.
+
+I will also use Synthea~\cite{syntheaGithub} to generate a synthetic OMOP dataset containing approximately 5,000
+patients for my teammates to begin using. Our group plans to pre-train an agent on OMOP data because OMOP is intended
+to provide a standardized, general-purpose data model across different healthcare systems.
+
+Finally, I will take a deeper look at the paper's code to understand how its model-training pipeline works. I will use
+that understanding to begin designing experiments with the synthetic OMOP data that are currently available.
+
+\section{AI Disclaimer}
+
+I used GPT-5.6 Sol to guide me throughout this process and assist with writing this report. I also used it to summarize
+the LA-CDM paper. I reviewed and revised the resulting material and take responsibility for the final content.
+
+
+\begin{thebibliography}{9}
 
 \bibitem{baniharouni2025language}
 David Bani-Harouni, Chantal Pellegrini, Ege {\"O}zsoy, Nassir Navab, and
@@ -62,6 +102,11 @@ Matthias Keicher.
 reinforcement learning.
 \newblock In \emph{International Conference on Learning Representations}, 2026.
 \newblock \url{https://arxiv.org/abs/2506.13474}.
+
+\bibitem{syntheaGithub}
+Synthetic Health.
+\newblock Synthea: Synthetic patient population simulator.
+\newblock GitHub repository, \url{https://github.com/synthetichealth/synthea}, accessed September 29, 2026.
 
 \end{thebibliography}
 

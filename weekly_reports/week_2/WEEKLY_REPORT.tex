@@ -1,0 +1,59 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+
+\title{CAI6734 Weekly Report 2}
+\author{Omer Kahveci}
+\date{October 6, 2026}
+
+\begin{document}
+\maketitle
+
+\section{Project Objective}
+
+This week was primarily spent attempting to start the full LA-CDM training
+run. The replication did not produce a completed trained model or new
+evaluation results.
+
+\section{Accomplishments}
+
+I submitted several training runs on HiPerGator using two NVIDIA L4 GPUs.
+The model and vLLM process initialized successfully, but training repeatedly
+ran out of GPU memory. One run reached step 90 of 300 before failing during
+backpropagation. Another configuration failed during vLLM initialization
+because its memory reservation was too small for the model weights.
+
+I reduced GRPO generations from eight to four, reduced the maximum completion
+length from 256 to 128 tokens, and retained microbatching and chunked
+reference-log-probability calculations. These changes have not yet been
+validated by a completed full training run.
+
+\section{Challenges}
+
+The main issue was GPU memory. Two L4 GPUs provide separate 22~GB memory
+spaces rather than one combined pool: one GPU is used for training and the
+other for vLLM. The training GPU still exceeded its capacity on longer
+examples. A larger GPU would likely simplify the run, but an A40 was not
+available in the selected partition.
+
+\section{Next Steps}
+
+Given the resource limitations encountered during training, I have decided to
+pivot away from working toward reproducing the paper's results. During the
+next week, while my other teammates focus on reviewing the literature and
+continuing their reproduction efforts, I will begin building a full-stack
+application to support our agentic-search work.
+
+Since our group has become interested in the OMOP data model, I will use an
+OMOP-formatted MIMIC dataset that I already have access to through PhysioNet.
+The application will allow a user to submit a free-text request alongside a
+patient ID. A search agent will then retrieve relevant information for the
+frontend to visualize. As we continue exploring the project's options, the
+scope may evolve.
+
+\section{AI Disclaimer}
+
+I used GPT-5 to help interpret training logs and revise this report. I
+reviewed the resulting material and take responsibility for the final content.
+
+\end{document}

@@ -70,7 +70,9 @@ def load_model(cfg: DictConfig, inference_mode: bool = False) -> PreTrainedModel
         # Training mode: enable gradients and create fresh LoRA
         model.enable_input_require_grads()
         if cfg.training.use_vllm:
-            model.gradient_checkpointing_enable()
+            model.gradient_checkpointing_enable(
+                gradient_checkpointing_kwargs={"use_reentrant": False}
+            )
 
         lora_config = LoraConfig(
             r=cfg.model.lora_r,
@@ -229,6 +231,7 @@ def configure_grpo(cfg: DictConfig, eval_only: bool = False) -> GRPOConfig:
             per_device_train_batch_size=cfg.training.per_device_train_batch_size,
             per_device_eval_batch_size=cfg.training.per_device_eval_batch_size,
             gradient_checkpointing=cfg.training.gradient_checkpointing,
+            gradient_checkpointing_kwargs={"use_reentrant": False},
             # Generation parameters
             max_completion_length=cfg.training.max_completion_length,
             max_prompt_length=cfg.training.max_prompt_length,

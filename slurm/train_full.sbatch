@@ -39,6 +39,7 @@ echo "[SLURM] Output: $RUN_DIR"
     training.num_generations=4 \
     training.per_device_train_batch_size=1 \
     training.max_completion_length=128 \
+    environment.max_length=2048 \
     training.save_steps=25 \
     training.vllm_gpu_memory_utilization=0.9 \
     wandb.mode=disabled
