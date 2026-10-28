@@ -1,0 +1,129 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{CAI6734 Weekly Report 4: Completing LA-CDM Training}
+\author{Omer Kahveci}
+\date{October 20, 2026}
+
+\begin{document}
+\maketitle
+
+\section{Project Objective}
+
+This week I continued the LA-CDM reproduction using Meta-Llama-3-8B-Instruct
+and the four-condition MIMIC clinical decision-making cohort. The immediate
+goal was to complete one 300-step training cycle despite the memory limit of
+the two NVIDIA L4 GPUs available through the course allocation.
+
+\section{Accomplishments}
+
+The training schedule assigned 100 optimizer steps each to Decision Agent
+group-relative policy optimization (GRPO), Hypothesis Agent supervised
+fine-tuning, and Hypothesis Agent confidence-calibration GRPO. One L4 GPU
+held the trainable model and the other ran vLLM to generate clinical
+trajectories. The final job used four generations per case, a forward/backward
+microbatch size of one, a 128-token limit per generated completion, and a
+2,048-token trajectory limit. The model used LoRA adapters, BF16 computation,
+and non-reentrant gradient checkpointing.
+
+To fit the training GPU's memory, I changed the trainer to split each GRPO
+group into one-example forward and backward passes, compute reference-model
+log probabilities in no-gradient chunks, and calculate only the loss active
+in the current training phase. For Hypothesis Agent fine-tuning, I restricted
+the scored logits to the short supervised suffix instead of the full prompt.
+I also enabled non-reentrant gradient checkpointing and reduced the maximum
+trajectory length from 4,096 to 2,048 tokens. Checkpoints every 25 steps
+allowed interrupted runs to resume without repeating completed training.
+
+The resumed run completed all 300 optimizer steps and ended with a clean
+Slurm finish line on October 20. The final validation pass covered 240 cases
+with four rollouts per case, or 960 predictions. Table~\ref{tab:validation}
+places these results beside the earlier untrained zero-shot test run, which
+used one rollout for each of 240 test cases.
+
+\begin{table}[ht]
+  \centering
+  \caption{Untrained test results and trained validation results. These use
+  different data splits and rollout counts and are descriptive, not a
+  controlled before-and-after comparison.}
+  \label{tab:validation}
+  \begin{tabular}{lrr}
+    \toprule
+    Metric & Untrained test & Trained validation \\
+    \midrule
+    Diagnosis accuracy, all predictions & 8.75\% & 56.46\% \\
+    Diagnosis accuracy, diagnosed only & 72.41\% & 67.50\% \\
+    Undiagnosed fraction & 87.92\% & 16.35\% \\
+    Action-format reward & 0.1208 & 0.8365 \\
+    Macro F1, all predictions & 15.54\% & 57.59\% \\
+    Hypothesis accuracy & 65.25\% & 63.06\% \\
+    Expected calibration error & 10.87\% & 7.89\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The reported training loss was 0.005625. The final validation took about
+2.48 hours. The large difference in all-prediction accuracy is encouraging,
+but the different splits and rollout counts prevent attributing that
+difference to training alone.
+
+For context, the original LA-CDM paper trained Qwen-2.5-7B-Instruct and
+reported the test-set results in Table~\ref{tab:paper}. The paper trained
+until validation convergence, taking approximately three days; our Llama run
+completed one 300-step cycle. The different model, training duration, and
+evaluation setup make these published values reference points rather than
+direct targets for our validation run
+(\href{https://arxiv.org/abs/2506.13474}{Bani-Harouni et al., 2026},
+Table~1, Section~6, and Appendix~C).
+
+\begin{table}[ht]
+  \centering
+  \caption{Published trained Qwen LA-CDM test results.}
+  \label{tab:paper}
+  \begin{tabular}{lr}
+    \toprule
+    Metric & Paper result \\
+    \midrule
+    Mean class accuracy & 81.3\% \\
+    Micro F1 & 84.1\% \\
+    Macro F1 & 81.3\% \\
+    Average test cost & \$1,295.61 \\
+    Hypothesis accuracy & 81.9\% \\
+    Expected calibration error & 3.7\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Challenges}
+
+Earlier jobs exceeded the training GPU's roughly 22~GB usable memory on long
+trajectories, including an out-of-memory failure during backpropagation at
+step 90. Once the memory changes allowed longer runs, the Hypothesis Agent
+phase exposed a separate batching error: its target rows did not match the
+four GRPO rollout rows. I corrected its microbatch indexing and weighted each
+microbatch by its share of supervised target tokens. The completed run passed
+both loss-phase transitions.
+
+Some trajectories still contained invalid action formats or unknown test
+names; the 16.35\% undiagnosed fraction shows that completing the action
+protocol remains a meaningful limitation.
+
+\section{Next Steps}
+
+This result establishes that the full three-phase pipeline can train and
+resume on the course GPU allocation. The side-by-side figures do not yet
+establish improvement against the zero-shot baseline under matched evaluation
+conditions. I will verify the saved final adapter and
+evaluate it on the fixed 240-case test set using the baseline evaluation
+settings. I will then compare accuracy, undiagnosed fraction, format reward,
+test use, and calibration, and inspect representative invalid-action examples.
+
+\section{AI Disclaimer}
+
+I used OpenAI Codex to help interpret logs, revise training code, and draft
+this report. I reviewed the technical claims and remain responsible for the
+final report.
+
+\end{document}

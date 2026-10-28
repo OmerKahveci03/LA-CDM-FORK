@@ -532,3 +532,43 @@ now batches by its own row count and weights each microbatch by its fraction of
 the full batch's supervised target tokens. Empty HA target batches are logged
 and skipped. This fix still needs a resumed cluster run through HA-SFT and the
 next phase boundary.
+
+### Full 300-step training completed (2026-10-20)
+
+The resumed full-training job completed all 300 optimizer steps and its final
+240-case validation pass. The pasted `.err` log ends with
+`[SLURM] Finished: Tue Oct 20 06:55:06 PM EDT 2026`; the job ID was not included
+in the excerpt. This confirms that checkpoint resume, HA-SFT microbatching, and
+both loss-phase transitions ran to completion in this job. The final model save
+is invoked before the finished line in `src.train`; confirm the adapter files in
+the new `outputs/train_full_<JOB_ID>/` directory before evaluation.
+
+The final validation used four rollouts per case (960 predictions across 240
+cases). Reported metrics were:
+
+| Metric | Final validation |
+|---|---:|
+| All-rollout diagnosis accuracy (`eval_all/accuracy`) | 56.46% |
+| Diagnosed-rollout accuracy (`eval_ignore/accuracy`) | 67.50% |
+| Undiagnosed fraction (`eval_none_fraction`) | 16.35% |
+| Action format reward | 0.8365 |
+| All-rollout micro F1 / macro F1 | 0.6149 / 0.5759 |
+| Hypothesis accuracy | 63.06% |
+| Expected calibration error | 0.0789 |
+| Mean validation reward | 1.2998 |
+
+The training summary reported `train_loss=0.005625`, runtime 24,996.8 seconds,
+and `epoch=0.16`. The final validation runtime was 8,926.3 seconds. Invalid
+action-format and unknown-test warnings still occurred, so inspect their rates
+and examples. The earlier 8.75% zero-shot baseline was measured on the separate
+test set and with a different rollout setup; do not present it as a controlled
+improvement against this validation result. Next, locate the saved final adapter
+and evaluate it on the fixed 240-case test set with matching metrics/settings.
+
+The full test-set evaluation is prepared in `slurm/adapter_full.sbatch`. It
+selects the newest completed `outputs/train_full_*/` adapter automatically,
+runs all 240 test cases with the same evaluation overrides as the zero-shot
+baseline, and writes `outputs/adapter_full_<JOB_ID>/metrics.json`. Submit with
+`sbatch slurm/adapter_full.sbatch` after verifying the final adapter exists.
+The Week 4 report draft is at `weekly_reports/week_4/WEEKLY_REPORT.tex`; its
+test-set comparison remains pending that evaluation.
