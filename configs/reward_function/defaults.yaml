@@ -21,6 +21,7 @@ reward_functions:
       urinalysis: -0.0049
       electrolyte panel: -0.0132
     single_cost: false
+    multiplier: 1.0
 
 conf_cal_reward_func:
   _target_: src.reward_function.conf_cal_reward.ConfidenceCalibrationReward

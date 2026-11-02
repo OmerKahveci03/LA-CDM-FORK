@@ -1,6 +1,23 @@
 # LA-CDM Llama Reproduction Status
 
-Last updated: October 4, 2026
+Last updated: November 1, 2026
+
+## Latest results and direction
+
+The completed 300-step Llama adapter was evaluated on the fixed 240-case test
+split with one rollout per case, matching the untrained Llama baseline protocol.
+Overall diagnosis accuracy was 68.75% (165/240), compared with 8.75% (21/240)
+for the untrained model. The undiagnosed fraction fell from 87.92% to 2.08%.
+Mean tests rose from 1.16 to 2.73 per case, and mean diagnostic cost rose from
+$798.08 to $1,137.67. See `weekly_reports/week_5/WEEKLY_REPORT.tex` for the
+full table and interpretation. The earlier 56.46% trained validation accuracy
+used four rollouts per case and is a separate result.
+
+The research goal is to recreate and understand the paper's method and then
+test an improvement. `docs/IMPROVEMENT_EXPERIMENTS.md` records the proposed
+reward-penalty sweep, comparison protocol, and later ideas. Those experiments
+are planned; no improvement result is documented yet. The older sections below
+retain the chronology of the training and evaluation work.
 
 ## Goal
 

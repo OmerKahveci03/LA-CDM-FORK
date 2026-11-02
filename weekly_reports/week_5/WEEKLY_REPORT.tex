@@ -1,0 +1,135 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{CAI6734 Weekly Report 5: Evaluating the Trained LA-CDM Model}
+\author{Omer Kahveci}
+\date{October 27, 2026}
+
+\begin{document}
+\maketitle
+
+\section{Project Objective}
+
+This week I focused on evaluating the Meta-Llama-3-8B-Instruct LA-CDM model
+after its 300-step training cycle. The immediate goal is a matched comparison
+between the trained model and the untrained Llama baseline on the same
+240-case MIMIC-CDM test split, using one rollout per case.
+
+\section{Progress}
+
+I evaluated the saved LoRA adapter from the completed training run on the
+fixed MIMIC-CDM test split. Both the trained and untrained Llama evaluations
+used the same 240 cases and one rollout per case.
+
+The untrained baseline produced a valid final diagnosis for 29 of 240 cases.
+Its overall diagnosis accuracy was 8.75\%, counting undiagnosed cases as
+incorrect, while accuracy among completed diagnoses was 72.41\%. Its
+undiagnosed fraction was 87.92\%. This gap suggests that action-protocol
+completion is a major limitation of the untrained model.
+
+The completed training run also produced the validation results in
+Table~\ref{tab:validation}. This pass used 240 validation cases with four
+rollouts per case, for 960 predictions. It is reported separately from the
+matched test-set comparison in Table~\ref{tab:test}.
+
+\begin{table}[ht]
+  \centering
+  \caption{Trained Llama validation results after 300 training steps.}
+  \label{tab:validation}
+  \begin{tabular}{lr}
+    \toprule
+    Metric & Trained validation \\
+    \midrule
+    Diagnosis accuracy, all predictions & 56.46\% \\
+    Diagnosis accuracy, diagnosed only & 67.50\% \\
+    Undiagnosed fraction & 16.35\% \\
+    Action-format reward & 0.8365 \\
+    Macro F1, all predictions & 57.59\% \\
+    Hypothesis accuracy & 63.06\% \\
+    Expected calibration error & 7.89\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[ht]
+  \centering
+  \caption{Llama results on the same 240-case test split, with one rollout per
+  case.}
+  \label{tab:test}
+  \begin{tabular}{lrr}
+    \toprule
+    Metric & Untrained test & Trained test \\
+    \midrule
+    Diagnosis accuracy, all predictions & 8.75\% & 68.75\% \\
+    Diagnosis accuracy, diagnosed only & 72.41\% & 70.21\% \\
+    Undiagnosed fraction & 87.92\% & 2.08\% \\
+    Action-format reward & 0.1208 & 0.9792 \\
+    Macro F1, all predictions & 15.54\% & 66.27\% \\
+    Hypothesis accuracy & 65.25\% & 63.26\% \\
+    Expected calibration error & 10.87\% & 10.38\% \\
+    Average tests requested & 1.16 & 2.73 \\
+    Average diagnostic cost & \$798.08 & \$1,137.67 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Published LA-CDM Reference}
+
+Table~\ref{tab:paper} records the trained Qwen-2.5-7B-Instruct results
+reported by Bani-Harouni et al. in Table~1 and Section~6 of
+\href{https://arxiv.org/abs/2506.13474}{the LA-CDM paper}. These results
+provide a reference for the reproduction, but differences in the base model,
+training duration, and evaluation setup prevent a controlled comparison with
+the Llama results above. In particular, the paper's mean class accuracy is
+not the same metric as our overall accuracy.
+
+\begin{table}[ht]
+  \centering
+  \caption{Published trained Qwen LA-CDM test results.}
+  \label{tab:paper}
+  \begin{tabular}{lr}
+    \toprule
+    Metric & Paper result \\
+    \midrule
+    Mean class accuracy & 81.3\% \\
+    Micro F1 & 84.1\% \\
+    Macro F1 & 81.3\% \\
+    Average test cost & \$1,295.61 \\
+    Hypothesis accuracy & 81.9\% \\
+    Expected calibration error & 3.7\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Interpretation and Next Steps}
+
+The matched test results show a 60.00-percentage-point increase in overall
+diagnosis accuracy: 21 of 240 cases were correct for the untrained model,
+versus 165 of 240 for the trained model. The trained model completed a valid
+diagnosis in 235 cases, leaving five undiagnosed. Accuracy among diagnosed
+cases was 70.21\%, slightly below the untrained model's 72.41\% on its much
+smaller set of 29 completed diagnoses. The main measured gain is therefore
+reliable completion of the action protocol, rather than higher accuracy
+conditional on completing a diagnosis.
+
+The gain came with more test use: the average rose from 1.16 to 2.73 tests,
+and estimated diagnostic cost rose from \$798.08 to \$1,137.67 per case.
+Hypothesis accuracy decreased slightly from 65.25\% to 63.26\%, while expected
+calibration error changed from 10.87\% to 10.38\%. The trained test evaluation
+took 5,864.7 seconds, or about 98 minutes. The validation results above are
+not directly comparable to the untrained test results because they used a
+different split and four rollouts per case.
+
+Next I will inspect representative incorrect and undiagnosed trajectories,
+including the five cases without a final diagnosis, and examine whether
+additional tests improved decisions enough to justify their cost.
+
+\section{AI Disclaimer}
+
+I used OpenAI Codex to help inspect the evaluation workflow and draft this
+report. I reviewed the reported metrics and remain responsible for the final
+interpretation.
+
+\end{document}
