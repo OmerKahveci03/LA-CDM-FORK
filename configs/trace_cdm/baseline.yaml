@@ -1,0 +1,29 @@
+# Arm A: native LA-CDM evaluation. No hooks run; identical to running without TRACE.
+# Other arms inherit these defaults and override only what they change.
+enabled: false
+arm: baseline
+inject: false            # true = interventional: audit/critic notes enter the Decision Agent context
+redact_text: true        # exports omit history/result text; set false only for local debugging
+max_flags: 3             # rule findings injected per decision point (new findings only)
+max_inject_chars: 600
+
+# Deterministic audit thresholds (tune on validation, never on test)
+audit:
+  high_confidence: 0.8   # Hypothesis Agent confidence/10
+  low_confidence: 0.4
+
+# Adaptive critic activation gate (tune on validation, never on test)
+gate:
+  ambiguous_high_confidence: 0.8
+  max_calls_per_episode: 4
+
+critic:
+  mode: none             # none | adaptive | always
+  shuffle: false         # negative control: serve another patient's critique
+  # Local, UF-approved instruction checkpoint. Never downloaded (local_files_only).
+  model_path: ${oc.env:TRACE_CRITIC_MODEL,null}
+  device: cuda:2         # cuda:0 = policy model, cuda:1 = vLLM; request a third GPU
+  load_in_4bit: false
+  max_new_tokens: 256
+  batch_size: 8
+  max_result_chars: 1200

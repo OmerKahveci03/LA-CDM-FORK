@@ -8,6 +8,7 @@ defaults:
   - environment: la_cdm
   - experiment: la_cdm
   - evaluation: defaults
+  - trace_cdm: baseline
 
 hydra:
   job:

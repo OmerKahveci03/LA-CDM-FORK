@@ -1,0 +1,10 @@
+# Arm C: B + LLM Evidence Critic, invoked only when the gate fires.
+defaults:
+  - baseline
+  - _self_
+
+enabled: true
+arm: adaptive
+inject: true
+critic:
+  mode: adaptive

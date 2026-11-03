@@ -1,0 +1,12 @@
+# Arm E (negative control): C, but each critique comes from a different patient.
+# The critic still runs on the real case so compute matches arm C.
+defaults:
+  - baseline
+  - _self_
+
+enabled: true
+arm: shuffled
+inject: true
+critic:
+  mode: adaptive
+  shuffle: true

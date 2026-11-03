@@ -1,0 +1,9 @@
+# Arm B (shadow): export trajectories and deterministic audits; nothing reaches the agent.
+# Must reproduce the baseline metrics exactly.
+defaults:
+  - baseline
+  - _self_
+
+enabled: true
+arm: shadow
+inject: false
