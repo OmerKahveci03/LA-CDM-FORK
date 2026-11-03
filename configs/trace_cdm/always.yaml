@@ -1,0 +1,12 @@
+# Arm D: B + LLM Evidence Critic at every decision point (compute/utility ablation).
+defaults:
+  - baseline
+  - _self_
+
+enabled: true
+arm: always
+inject: true
+critic:
+  mode: always
+gate:
+  max_calls_per_episode: null

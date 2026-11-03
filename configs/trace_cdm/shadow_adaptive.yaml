@@ -1,0 +1,11 @@
+# Shadow critic: the gated critic runs and is logged, but nothing reaches the agent.
+# Measures audit/critic behavior on the baseline's own trajectories.
+defaults:
+  - baseline
+  - _self_
+
+enabled: true
+arm: shadow_adaptive
+inject: false
+critic:
+  mode: adaptive

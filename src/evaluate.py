@@ -5,9 +5,10 @@ from pathlib import Path
 import hydra
 import wandb
 from hydra.core.hydra_config import HydraConfig
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from transformers import set_seed
 
+from src.trace_cdm.controller import build_trace_controller
 from src.trainer.cdm_grpo_trainer import CDMGRPOTrainer
 from src.utils.setup import (
     setup_wandb,
@@ -34,6 +35,14 @@ def main(cfg: DictConfig):
     environment = prepare_environment(cfg)
     reward_functions = prepare_reward_functions(cfg)
     conf_cal_reward_func = prepare_conf_cal_reward_func(cfg)
+
+    # TRACE-CDM arm (None for the native baseline, which leaves the environment untouched)
+    environment.trace = build_trace_controller(
+        OmegaConf.to_container(cfg.trace_cdm, resolve=True),
+        OmegaConf.to_container(cfg.dataset, resolve=True),
+        dict(cfg.evaluation.test_costs_usd),
+        seed=cfg.training.seed,
+    )
 
     # Model and trainer config
     model = load_model(cfg, inference_mode=True)
@@ -63,6 +72,11 @@ def main(cfg: DictConfig):
     configured_metrics_path = cfg.evaluation.metrics_output_file
     metrics_path = Path(configured_metrics_path) if configured_metrics_path else Path(output_dir) / "metrics.json"
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    if environment.trace is not None:
+        # Episodes, critic call log and summary go next to metrics.json.
+        trace_summary = environment.trace.write(metrics_path.parent)
+        metrics.update({f"trace_{k}": v for k, v in trace_summary.items()
+                        if isinstance(v, (int, float, str, bool))})
     with metrics_path.open("w") as f:
         json.dump(metrics, f, indent=2)
 

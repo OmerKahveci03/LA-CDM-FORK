@@ -1,0 +1,8 @@
+# Arm B (interventional): rule-based audit findings are added to the Decision Agent context.
+defaults:
+  - baseline
+  - _self_
+
+enabled: true
+arm: deterministic
+inject: true

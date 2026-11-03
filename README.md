@@ -121,6 +121,17 @@ python -m accelerate.commands.launch --num_processes 1 -m src.evaluate \
 
 Metrics are saved to `evaluation/test_metrics.json` and logged to Weights & Biases.
 
+### TRACE-CDM evidence critic (inference-time extension)
+
+`src/trace_cdm/` adds a deterministic evidence audit and an optional gated LLM Evidence Critic between the Hypothesis Agent and the Decision Agent of the trained model. Select an arm with `trace_cdm=<baseline|shadow|shadow_adaptive|deterministic|adaptive|always|shuffled>`; the default `baseline` leaves evaluation unchanged. For example:
+
+```bash
+python -m accelerate.commands.launch --num_processes 1 -m src.evaluate \
+    evaluation.adapter_dir=<path-to-adapter> trace_cdm=shadow
+```
+
+On HiPerGator, `scripts/submit_trace_arms.sh` submits every arm, and `scripts/trace_compare.py` verifies the shadow arm against the baseline and reports paired differences. See `docs/TRACE_CDM_METHODS.md`.
+
 
 ## Citation
 

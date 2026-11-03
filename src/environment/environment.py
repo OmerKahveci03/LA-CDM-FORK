@@ -48,6 +48,8 @@ class Trajectory:
         self.hypothesis_prompt: list[str] = []
         self.confidence: list[float | None] = []
         self.error: bool = False
+        # One entry per environment step: action, input and environment outcome.
+        self.action_log: list[dict] = []
 
     def update_output(self, output, tokenizer) -> None:
         self.output = output
@@ -147,6 +149,9 @@ class Environment:
         self.ha_label_format = "Hypothesis: {hypothesis}{eos_token}" if not generate_confidence_calibration else "Hypothesis: {hypothesis}\nConfidence: {confidence}{eos_token}"
         self.generate_confidence_calibration = generate_confidence_calibration
         self._rng = random.Random(seed)
+        # Optional TRACE-CDM controller (src.trace_cdm.controller.TraceController).
+        # None keeps the native LA-CDM behavior; training never sets it.
+        self.trace = None
 
     def construct_prompt(self, inputs: list[dict]) -> list[dict]:
         """Construct chat-formatted prompts for each patient input.
@@ -236,6 +241,8 @@ class Environment:
         trajectories = [Trajectory(prompt, input['test_results'], input['patient_history']) for prompt, input in zip(prompts_text, inputs)]
         # clear ha_prompt_ids
         self.ha_prompt_ids.clear()
+        if self.trace is not None:
+            self.trace.start(trajectories, inputs)
 
         # Loop while not all trajectories are completed
         step = 0
@@ -244,6 +251,10 @@ class Environment:
             if self.generate_hypothesis:
                 active_prompts = self._generate_hypothesis(active_trajectories, model, sampling_params, processing_class)
             else:
+                active_prompts = [trajectory.text for trajectory in active_trajectories]
+            if self.trace is not None:
+                # Audit (and in interventional arms, annotate) before the Decision Agent acts.
+                self.trace.before_decision(active_trajectories, step)
                 active_prompts = [trajectory.text for trajectory in active_trajectories]
             # Generate responses
             tokenizer = model.get_tokenizer()
@@ -254,6 +265,8 @@ class Environment:
             # Step the environment forward
             for trajectory in active_trajectories:
                 self.step(trajectory, step, model.get_tokenizer())
+            if self.trace is not None:
+                self.trace.after_step(active_trajectories, step)
             step += 1
         
         # Get the completion_ids of the whole trajectory, i.e., all completions and test results, only excluding the initial prompt.
@@ -273,6 +286,9 @@ class Environment:
                 self.ha_label_ids = processing_class([self.ha_label_format.format(hypothesis=inputs[0]['condition'], confidence="0", eos_token=processing_class.eos_token)] * len(self.ha_prompt_ids), add_special_tokens=False)['input_ids']
             else:
                 self.ha_label_ids = processing_class([self.ha_label_format.format(hypothesis=inputs[0]['condition'], eos_token=processing_class.eos_token)] * len(self.ha_prompt_ids), add_special_tokens=False)['input_ids']
+
+        if self.trace is not None:
+            self.trace.finish(trajectories)
 
         # Generate confidence calibration group generations
         num_generations_ha = len(prompts_text)
@@ -335,6 +351,7 @@ class Environment:
         """
         # Check if too many steps
         if step > self.max_steps:
+            trajectory.action_log.append({"step": step, "action": None, "action_input": None, "outcome": "max_steps"})
             trajectory.complete(invalid=True)
             return
         
@@ -347,6 +364,7 @@ class Environment:
                 step,
                 trajectory.last_completion,
             )
+            trajectory.action_log.append({"step": step, "action": None, "action_input": None, "outcome": "invalid_format"})
             trajectory.complete(invalid=True)
             return
     
@@ -355,33 +373,44 @@ class Environment:
             logging.warning("Unknown model action %r at environment step %s", action, step)
             observation = "\nError: Unknown action. Valid actions are: " + ", ".join(self.possible_actions) + "." + "\n\n---\n"
             trajectory.error = True
+            outcome = "unknown_action"
         elif action == "test":
             # 3. If the action is known, check if the action input is valid.
             if action_input not in [test.lower() for test in self.test_list]:
                 logging.warning("Unknown test action input %r at environment step %s", action_input, step)
                 observation = "\nError: Unknown test. Only request tests as given above." + "\n\n---\n"
                 trajectory.error = True
+                outcome = "unknown_test"
             else:
                 # 4. If the action is test, add test results.
                 result = trajectory.get_test_result(action_input)
                 observation = "\nObservation: " + result + "\n\n---\n"
+                outcome = "result"
                 if result == "not available.\n":
                     trajectory.error = True
+                    outcome = "not_available"
         elif action == "diagnosis":
             # 3. If the action is known, check if the action input is valid.
             if action_input not in [disease.lower() for disease in self.disease_list]:
                 logging.warning("Unknown diagnosis action input %r at environment step %s", action_input, step)
                 observation = "\nError: Unknown diagnosis. Valid diagnoses are: " + ", ".join(self.disease_list) + "." + "\n\n---\n"
                 trajectory.error = True
+                outcome = "unknown_diagnosis"
             else:
                 # 5. If the action is diagnosis, set it andreturn true complete flag.
                 trajectory.diagnosis = action_input
                 trajectory.complete()
                 observation = None
+                outcome = "diagnosed"
 
         # 6. Check length of new text. If too long, set invalid flag.  
         observation_token_length = len(tokenizer.encode(observation)) if observation else 0
-        if len(trajectory.token_mask) + observation_token_length > self.max_length:
+        too_long = len(trajectory.token_mask) + observation_token_length > self.max_length
+        trajectory.action_log.append({
+            "step": step, "action": action, "action_input": action_input,
+            "outcome": "too_long" if too_long else outcome,
+        })
+        if too_long:
             trajectory.complete(invalid=True)
             return
 
