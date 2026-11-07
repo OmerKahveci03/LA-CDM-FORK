@@ -1,6 +1,6 @@
 # LA-CDM Llama Reproduction Status
 
-Last updated: November 1, 2026
+Last updated: November 3, 2026
 
 ## Latest results and direction
 
@@ -16,8 +16,12 @@ used four rollouts per case and is a separate result.
 The research goal is to recreate and understand the paper's method and then
 test an improvement. `docs/IMPROVEMENT_EXPERIMENTS.md` records the proposed
 reward-penalty sweep, comparison protocol, and later ideas. Those experiments
-are planned; no improvement result is documented yet. The older sections below
-retain the chronology of the training and evaluation work.
+have started: the zero-cost arm completed training and matched test evaluation.
+It reached 77.50% test accuracy at $1,627.71 mean diagnostic cost, versus
+68.75% at $1,137.67 for the original trained model. The 1.5x arm completed
+training but failed final validation: all rollouts were undiagnosed. Details
+and next checks are in `docs/results/cost_sweep.md`. The older sections retain the chronology
+of the training and evaluation work.
 
 ## Goal
 

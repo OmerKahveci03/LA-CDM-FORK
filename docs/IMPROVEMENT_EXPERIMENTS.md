@@ -1,6 +1,6 @@
 # LA-CDM improvement experiments
 
-Last updated: November 1, 2026
+Last updated: November 3, 2026
 
 ## Research goal and current reference
 
@@ -25,7 +25,7 @@ These are proposed settings, not results. `TestCostReward.multiplier` multiplies
 
 For every arm, use the same model, seed, train/validation/test splits, 300-step phase schedule, four training generations, memory settings, and one-rollout test evaluation as the reference run. Start each new arm at step 0. Use `slurm/train_cost_sweep.sbatch`, which defaults to a fresh run and stores each arm under `outputs/cost_sweep/cost_<multiplier>/train_<JOB_ID>/`. The older `slurm/train_full.sbatch` automatically resumes the latest complete `outputs/train_full_*/checkpoint-*` and is unsuitable for a fresh sweep arm. The sweep evaluation job requires an explicit adapter path.
 
-On HiPerGator, after syncing these changes and checking that `data/` and the model environment are available, submit one arm at a time:
+On HiPerGator, after syncing these changes and checking that `data/` and the model environment are available, submit training arms deliberately and record each job ID. An evaluation of one arm and training of another use separate output directories and can run concurrently if the Slurm allocation permits; each job requests two L4 GPUs and 64 GB RAM. Start with the 1.5x arm before deciding whether the 2x arm is worth the compute:
 
 ```bash
 sbatch --export=ALL,COST_MULTIPLIER=0 slurm/train_cost_sweep.sbatch
@@ -54,4 +54,4 @@ The first decision is whether the cost sweep yields a useful accuracy-cost trade
 
 ## Experiment record
 
-For each run, record: hypothesis; code commit; config and reward multiplier; data split and seed; training and evaluation job IDs; adapter path; whether training started fresh or resumed within the same arm; validation metrics; test metrics; and representative failures. Mark planned runs as planned until logs and metrics have been checked. No improvement experiment in this document has been reported as completed.
+For each run, record: hypothesis; code commit; config and reward multiplier; data split and seed; training and evaluation job IDs; adapter path; whether training started fresh or resumed within the same arm; validation metrics; test metrics; and representative failures. Mark planned runs as planned until logs and metrics have been checked. Results and provenance are in `docs/results/cost_sweep.md`: the zero-cost arm completed a matched test evaluation; the 1.5x arm completed training but had zero valid diagnoses in final validation. Investigate that failure before spending compute on 2x.

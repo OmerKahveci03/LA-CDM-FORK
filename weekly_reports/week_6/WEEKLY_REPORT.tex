@@ -1,0 +1,147 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{CAI6734 Weekly Report 6: Effect of the Test-Cost Penalty on Training}
+\author{Omer Kahveci}
+\date{November 3, 2026}
+
+\begin{document}
+\maketitle
+
+\section{Project Objective}
+
+The Week 5 report documented the training and evaluation of the
+Meta-Llama-3-8B-Instruct LA-CDM model. This week's objective was to examine
+how changes to the training configuration affect the improvements obtained
+from training, beginning with the test-cost penalty in the training reward.
+This penalty discourages the Decision Agent from ordering diagnostic tests;
+adjusting its weight is therefore expected to shift the balance between
+diagnostic accuracy and diagnostic cost. The initial hypothesis was that a
+stronger penalty would reduce cost while largely preserving accuracy. Each
+variant is compared with the Week 5 trained model (68.75\% test accuracy and
+\$1,137.67 mean diagnostic cost) on the same 240-case test split, using one
+rollout per case.
+
+\section{Accomplishments}
+
+\subsection*{Experimental Setup}
+
+A multiplier was added to the test-cost term of the training reward. The
+multiplier scales the per-test penalties and leaves the diagnosis and
+action-format rewards unchanged; the Week 5 model corresponds to a multiplier
+of 1.0. Three variants were planned: 0x (no penalty), 1.5x, and 2x. Each
+variant uses the same base model, random seed, data splits, 300-step training
+schedule, and remaining settings as the Week 5 run, so that the multiplier is
+the only experimental change. The dollar costs used to report diagnostic cost
+during evaluation are identical across variants. The 0x and 1.5x variants were
+trained this week.
+
+\subsection*{Zero-Cost Variant}
+
+The 0x variant completed training and was evaluated on the test split.
+Table~\ref{tab:test} compares its results with those of the Week 5 trained
+model.
+
+\begin{table}[ht]
+  \centering
+  \caption{Test results on the same 240 cases, with one rollout per case.}
+  \label{tab:test}
+  \begin{tabular}{lrr}
+    \toprule
+    Metric & Original (1.0x) & Zero-cost (0x) \\
+    \midrule
+    Diagnosis accuracy, all predictions & 68.75\% & 77.50\% \\
+    Diagnosis accuracy, diagnosed only & 70.21\% & 81.22\% \\
+    Undiagnosed fraction & 2.08\% & 4.58\% \\
+    Action-format reward & 0.9792 & 0.9542 \\
+    Macro F1, all predictions & 66.27\% & 74.50\% \\
+    Hypothesis accuracy & 63.26\% & 72.97\% \\
+    Expected calibration error & 10.38\% & 8.77\% \\
+    Average tests requested & 2.73 & 2.29 \\
+    Average diagnostic cost & \$1,137.67 & \$1,627.71 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Removing the penalty increased overall test accuracy by 8.75 percentage points
+(186 versus 165 correct diagnoses out of 240). Macro F1, hypothesis accuracy,
+and expected calibration error also improved. However, mean diagnostic cost
+increased by \$490.04 (approximately 43\%), even though the model requested
+approximately 0.44 fewer tests per case. This pattern suggests a shift toward
+more expensive tests, although the aggregate metrics do not identify which
+tests changed. The number of undiagnosed cases increased from 5 to 11. Because
+these results come from a single training run, the magnitude of the
+improvement has not yet been established across random seeds.
+
+\subsection*{1.5x Variant}
+
+The 1.5x variant completed training, but the resulting model did not perform
+as intended, and the cause is under investigation. In the final validation
+pass, none of the 960 rollouts (240 cases with four rollouts each) produced a
+valid diagnosis, and the action-format reward was 0. The model was therefore
+not evaluated on the test split. To determine when the problem began, a script
+was written to summarize the training rewards in each of the three training
+phases (Table~\ref{tab:collapse}).
+
+\begin{table}[ht]
+  \centering
+  \caption{1.5x variant: training steps with a positive batch-mean reward.}
+  \label{tab:collapse}
+  \begin{tabular}{lrrr}
+    \toprule
+    Training phase & Format & Diagnosis & Mean cost reward \\
+    \midrule
+    Decision Agent GRPO, steps 1--100 & 1/100 & 1/100 & $-0.0553$ \\
+    Hypothesis SFT, steps 101--200 & 0/100 & 0/100 & $-0.0259$ \\
+    Confidence calibration, steps 201--300 & 0/100 & 0/100 & $-0.0213$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The failure was already present in the initial Decision Agent training steps,
+before the Hypothesis Agent phases began. The transition between training
+phases therefore does not account for it.
+
+\section{Challenges}
+
+The principal open issue is the failure of the 1.5x variant. One possible
+explanation is that the untrained Llama model rarely produces a valid action
+at the start of training, so the diagnosis and format rewards are almost
+always zero during the early steps. Because GRPO compares rewards within each
+group of four rollouts, the early learning signal would then be dominated by
+differences in test cost. This could push the policy toward ordering fewer
+tests rather than toward producing valid diagnoses. This explanation has not
+been confirmed; the small group size and the model's initial format errors may
+also contribute.
+
+In addition, the 0x result ran counter to the initial hypothesis: removing the
+penalty improved accuracy, at the expense of higher diagnostic cost. The logs
+for both variants also contain repeated requests for an unrecognized
+\texttt{Complete Blood Count (CBC)} action, together with invalid-format
+warnings, which have not yet been traced.
+
+\section{Next Steps}
+
+\begin{itemize}
+  \item Investigate the cause of the 1.5x failure and rerun that variant.
+  \item Update the evaluation pipeline to record every decision the model makes
+        on the validation set in a CSV file, with one row per action. This will
+        show the number of tests ordered for each patient and facilitate
+        inspection of the model's reasoning.
+  \item Report 95\% confidence intervals and $p$-values for future results.
+        The per-case records will support paired comparisons between models
+        evaluated on the same test cases.
+  \item Review related literature for approaches to revising the prompts or
+        the structure of the agentic loop.
+\end{itemize}
+
+\section{AI Disclaimer}
+
+I used OpenAI Codex and Anthropic Claude to assist with implementing the
+experiment, inspecting training and evaluation logs, and drafting this report.
+I reviewed the reported metrics and remain responsible for the final
+interpretation.
+
+\end{document}
