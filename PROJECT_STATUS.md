@@ -1,5 +1,9 @@
 # LA-CDM Llama Reproduction Status
 
+> **In progress (November 7, 2026):** full-pass 1x baseline (1,920 steps, validation
+> every 100 steps, per-disease metrics). Runbook, decisions, run record and
+> report notes: `docs/FULL_PASS_1X_RUNBOOK.md`. Current position: Step 1 (smoke test).
+
 Last updated: November 3, 2026
 
 ## Latest results and direction
