@@ -43,7 +43,9 @@ echo "[SLURM] Output: $RUN_DIR"
     training.max_steps=2 \
     training.num_generations=2 \
     training.per_device_train_batch_size=2 \
-    training.eval_strategy=no \
+    training.eval_strategy=steps \
+    training.eval_steps=1 \
+    training.eval_on_start=true \
     training.save_steps=1 \
     training.vllm_gpu_memory_utilization=0.9 \
     wandb.mode=disabled

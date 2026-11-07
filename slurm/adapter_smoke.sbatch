@@ -15,7 +15,8 @@ set -euo pipefail
 REPO_DIR=/blue/prismap-ai-core/omerkahveci/LA-CDM-FORK
 PYTHON_BIN=/blue/prismap-ai-core/omerkahveci/envs/la-cdm/bin/python
 ADAPTER_DIR=${1:?Usage: sbatch slurm/adapter_smoke.sbatch PATH_TO_ADAPTER}
-METRICS_FILE="outputs/adapter_smoke_${SLURM_JOB_ID}/metrics.json"
+OUT_DIR="outputs/adapter_smoke/$(date +%Y%m%d-%H%M%S)"
+METRICS_FILE="$OUT_DIR/metrics.json"
 
 cd "$REPO_DIR"
 if [[ ! -x "$PYTHON_BIN" ]]; then
@@ -42,6 +43,7 @@ echo "[SLURM] Metrics: $METRICS_FILE"
     --mixed_precision no \
     --dynamo_backend no \
     -m src.evaluate \
+    hydra.run.dir="$OUT_DIR" \
     evaluation.base_model=false \
     evaluation.adapter_dir="$ADAPTER_DIR" \
     evaluation.metrics_output_file="$METRICS_FILE" \
