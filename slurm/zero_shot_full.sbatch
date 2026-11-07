@@ -10,11 +10,17 @@
 #SBATCH --mem=64G
 #SBATCH --time=04:00:00
 
+# Untrained Llama on the fixed 240-case test split, with the same evaluation
+# settings as the trained arms. Results go to outputs/zero_shot/test/
+# (metrics.json, test_episodes.csv, test_summary.json, transcripts).
+# An existing result is never overwritten unless OVERWRITE=1.
+
 set -euo pipefail
 
 REPO_DIR=/blue/prismap-ai-core/omerkahveci/LA-CDM-FORK
 PYTHON_BIN=/blue/prismap-ai-core/omerkahveci/envs/la-cdm/bin/python
-METRICS_FILE="outputs/zero_shot_full_${SLURM_JOB_ID}/metrics.json"
+OUT_DIR="outputs/zero_shot/test"
+METRICS_FILE="$OUT_DIR/metrics.json"
 
 if [[ ! -x "$PYTHON_BIN" ]]; then
     echo "Missing Python executable: $PYTHON_BIN" >&2
@@ -23,6 +29,16 @@ fi
 
 cd "$REPO_DIR"
 mkdir -p logs
+if [[ -f "$METRICS_FILE" && "${OVERWRITE:-0}" != "1" ]]; then
+    echo "$METRICS_FILE already exists; set OVERWRITE=1 to replace it." >&2
+    exit 2
+fi
+mkdir -p "$OUT_DIR"
+exec > >(tee -a "$OUT_DIR/eval_output.log") 2>&1
+JOB_ID=${SLURM_JOB_ID:-local}
+STARTED=$(date +%Y%m%d-%H%M%S)
+COMMIT="$(git rev-parse --short HEAD)$(git diff --quiet HEAD -- src configs prompts || echo '-dirty')"
+echo "[SLURM] Job: $JOB_ID  Commit: $COMMIT"
 export VLLM_USE_V1=0
 export HYDRA_FULL_ERROR=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -38,6 +54,8 @@ echo "[SLURM] Metrics: $METRICS_FILE"
     --mixed_precision no \
     --dynamo_backend no \
     -m src.evaluate \
+    hydra.run.dir="$OUT_DIR" \
+    "hydra.output_subdir=.hydra/${STARTED}" \
     evaluation.base_model=true \
     evaluation.metrics_output_file="$METRICS_FILE" \
     dataset.small_sample=false \

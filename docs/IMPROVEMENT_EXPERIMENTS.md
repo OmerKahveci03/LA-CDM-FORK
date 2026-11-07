@@ -23,23 +23,45 @@ Run separate training arms from the same base model and data split, changing onl
 
 These are proposed settings, not results. `TestCostReward.multiplier` multiplies the sum of per-test penalties; diagnosis and format rewards stay unchanged. The 0 arm keeps the same reward-function list but assigns zero test penalty. Do not change the dollar costs in `configs/evaluation/defaults.yaml`: those are measurement values, not training penalties. If the first stronger arm loses substantial accuracy or increases failures, review that result before spending compute on the next arm. A later, narrower sweep can explore values between the best-performing settings.
 
-For every arm, use the same model, seed, train/validation/test splits, 300-step phase schedule, four training generations, memory settings, and one-rollout test evaluation as the reference run. Start each new arm at step 0. Use `slurm/train_cost_sweep.sbatch`, which defaults to a fresh run and stores each arm under `outputs/cost_sweep/cost_<multiplier>/train_<JOB_ID>/`. The older `slurm/train_full.sbatch` automatically resumes the latest complete `outputs/train_full_*/checkpoint-*` and is unsuitable for a fresh sweep arm. The sweep evaluation job requires an explicit adapter path.
+For every arm, use the same model, seed, train/validation/test splits, 300-step phase schedule, four training generations, memory settings, and one-rollout test evaluation as the reference run. Use `slurm/train_cost_sweep.sbatch` for training and `slurm/evaluate_cost_sweep.sbatch` for the test evaluation. Since November 7, 2026, each arm has one fixed directory, and no job IDs need to be recorded or passed:
 
-On HiPerGator, after syncing these changes and checking that `data/` and the model environment are available, submit training arms deliberately and record each job ID. An evaluation of one arm and training of another use separate output directories and can run concurrently if the Slurm allocation permits; each job requests two L4 GPUs and 64 GB RAM. Start with the 1.5x arm before deciding whether the 2x arm is worth the compute:
-
-```bash
-sbatch --export=ALL,COST_MULTIPLIER=0 slurm/train_cost_sweep.sbatch
-sbatch --export=ALL,COST_MULTIPLIER=1.5 slurm/train_cost_sweep.sbatch
-sbatch --export=ALL,COST_MULTIPLIER=2 slurm/train_cost_sweep.sbatch
+```text
+outputs/cost_sweep/cost_<m>/        # e.g. cost_1, cost_1p5
+  jobs.log            # one line per job start, resume, finish, exit code and commit
+  train_output.log    # console output of every training job, appended
+  run_settings.txt    # settings fixed for this arm; a mismatched resubmit is refused
+  train/              # checkpoints, final adapter, training_complete.json
+    adapters/step_0300/              # adapter kept at every cycle end
+    episodes/train_episodes.csv      # one row per training rollout
+    episodes/val_step_0100_*.csv/.json/.jsonl   # validation episodes and summary
+  test_step_0300/     # metrics.json, test_episodes.csv, test_summary.json, transcripts
 ```
 
-Wait for each train job's successful finish line and verify its `adapter_config.json` and `adapter_model.safetensors` (or `.bin`). Then evaluate that exact adapter; substitute the actual job ID:
+Submit training with the arm's multiplier. After a time-out or failure, submit **the same command** again: the job resumes from the newest complete checkpoint in `train/`, removes replayed training-episode rows, and exits immediately once the arm has reached `MAX_STEPS`:
 
 ```bash
-sbatch --export=ALL,COST_MULTIPLIER=1.5,ADAPTER_DIR=outputs/cost_sweep/cost_1p5/train_<JOB_ID> slurm/evaluate_cost_sweep.sbatch
+sbatch --export=ALL,COST_MULTIPLIER=1 slurm/train_cost_sweep.sbatch
 ```
 
-Evaluation writes `outputs/cost_sweep/cost_1p5/eval_<JOB_ID>/metrics.json`. Use `COST_MULTIPLIER=0` with `cost_0`, or `COST_MULTIPLIER=2` with `cost_2`, for the other arms. To resume an interrupted arm, pass `RESUME_FROM_CHECKPOINT=outputs/cost_sweep/cost_1p5/train_<OLD_JOB_ID>/checkpoint-<STEP>` together with the same multiplier. The job validates that the checkpoint is inside that arm and has trainer state and optimizer files. A new job writes to its own output directory.
+After `train/training_complete.json` exists, evaluate the final adapter on the test split:
+
+```bash
+sbatch --export=ALL,COST_MULTIPLIER=1 slurm/evaluate_cost_sweep.sbatch
+```
+
+### Planned run: full-pass 1x baseline (decided November 7, 2026)
+
+Train the 1x arm (the paper's unscaled test-cost penalty) for **1,920 steps**, one pass over every training patient. Loss phases switch every 100 steps; validation (all 240 cases, four sampled rollouts each, stratified by disease) runs before training and every 100 steps, plus a final pass at step 1,920. Adapters are kept at every cycle end (300, 600, …, 1,800) and at 1,920, so the step-300 adapter doubles as the matched comparison to the 0x and 1.5x arms (the learning rate is constant, so the first 300 steps do not depend on the total length). The last 120 steps are 100 DA steps and 20 HA-SFT steps of an incomplete seventh cycle; the step-1,800 adapter is the last complete cycle.
+
+```bash
+sbatch --export=ALL,COST_MULTIPLIER=1,MAX_STEPS=1920 slurm/train_cost_sweep.sbatch   # resubmit unchanged until complete
+sbatch --export=ALL,COST_MULTIPLIER=1,ADAPTER_STEP=300 slurm/evaluate_cost_sweep.sbatch   # can run once adapters/step_0300 exists
+sbatch --export=ALL,COST_MULTIPLIER=1 slurm/evaluate_cost_sweep.sbatch   # final (step 1,920) adapter, after training
+```
+
+Expected cost: roughly 25-35 h of training plus about 20 validation passes of about 2.5 h each, so 4-5 jobs of 24 h.
+
+Optional variables: `MAX_STEPS` (default 300; raise it by 300 at a time to continue a finished arm in the same directory), `EVAL_ON_START=0` (skip the step-0 validation of the untrained model), `ADAPTER_STEP` (evaluate an earlier cycle-end snapshot), and `OVERWRITE=1` (replace an existing test result). Summarize any episode file with `python scripts/summarize_episodes.py <csv>`; it prints overall and per-disease accuracy, end reasons, a confusion matrix, test-ordering rates, and for training files the share of steps whose advantages came only from test cost. The completed 0x and 1.5x arms predate this layout and remain in their `train_<JOB_ID>/` and `eval_<JOB_ID>/` directories.
 
 Compare **overall diagnosis accuracy**, undiagnosed fraction, action-format reward, macro F1, mean tests, and mean dollar cost on the same 240-case test split. Also report accuracy among diagnosed cases, hypothesis accuracy, and calibration error to detect regressions. Prefer an arm that reduces cost while preserving accuracy and completion; present the full accuracy-versus-cost tradeoff rather than declaring a winner from a single metric. Use validation to choose any setting and reserve the fixed test set for the final comparison; repeated test-set selection would overfit the reported result.
 

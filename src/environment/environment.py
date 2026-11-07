@@ -20,6 +20,7 @@ class EnvironmentOutput:
     ece_calc_triplets: list[tuple] = field(default_factory=list)
     ha_hypotheses_lists: list[list[str]] = field(default_factory=list)
     ha_confidences_lists: list[list[float | None]] = field(default_factory=list)
+    episode_records: list[dict] = field(default_factory=list)
 
 class Trajectory:
     """State of a single patient episode through the environment.
@@ -48,6 +49,15 @@ class Trajectory:
         self.hypothesis_prompt: list[str] = []
         self.confidence: list[float | None] = []
         self.error: bool = False
+        # Observability: why the episode ended and every action it took.
+        self.end_reason: str | None = None
+        self.num_turns: int = 0
+        self.actions: list[str] = []
+        self.num_unavailable_requests: int = 0
+        self.num_unknown_test_requests: int = 0
+        self.num_repeat_requests: int = 0
+        self.num_unknown_actions: int = 0
+        self.num_unknown_diagnoses: int = 0
 
     def update_output(self, output, tokenizer) -> None:
         self.output = output
@@ -109,9 +119,10 @@ class Trajectory:
             self.requested_tests.append(test)
         return test_result
 
-    def complete(self, invalid: bool = False) -> None:
+    def complete(self, invalid: bool = False, reason: str = "diagnosis") -> None:
         self.completed = True
         self.invalid = invalid
+        self.end_reason = reason
 
 
 class Environment:
@@ -306,6 +317,30 @@ class Environment:
             ha_hypotheses_lists.append(ha_hypotheses_list)
             ha_confidences_lists.append(ha_confidences_list)
 
+        episode_records = [
+            {
+                "patient_id": input["patient_id"],
+                "label": input["condition"],
+                "diagnosis": trajectory.diagnosis,
+                "end_reason": trajectory.end_reason,
+                "num_turns": trajectory.num_turns,
+                "provided_tests": list(trajectory.provided_tests),
+                "actions": list(trajectory.actions),
+                "num_unavailable_requests": trajectory.num_unavailable_requests,
+                "num_unknown_test_requests": trajectory.num_unknown_test_requests,
+                "num_repeat_requests": trajectory.num_repeat_requests,
+                "num_unknown_actions": trajectory.num_unknown_actions,
+                "num_unknown_diagnoses": trajectory.num_unknown_diagnoses,
+                "hypotheses": list(trajectory.hypothesis),
+                # Stored on the agent's 0-10 scale for readability.
+                "confidences": [None if c is None else round(c * 10) for c in trajectory.confidence],
+                "transcript_tokens": len(trajectory.token_mask),
+                "last_completion": trajectory.last_completion,
+                "transcript": trajectory.text,
+            }
+            for trajectory, input in zip(trajectories, inputs)
+        ]
+
         return EnvironmentOutput(
             completion_ids=completion_ids,
             completion_mask=[trajectory.token_mask[len(trajectory.initial_prompt_token_ids):] for trajectory in trajectories],
@@ -318,6 +353,7 @@ class Environment:
             ece_calc_triplets=ece_calc_triplets,
             ha_hypotheses_lists=ha_hypotheses_lists,
             ha_confidences_lists=ha_confidences_lists,
+            episode_records=episode_records,
         )
         
 
@@ -333,9 +369,16 @@ class Environment:
             step: Current environment step index.
             tokenizer: HuggingFace tokenizer (for length checks).
         """
+        trajectory.num_turns += 1
         # Check if too many steps
         if step > self.max_steps:
-            trajectory.complete(invalid=True)
+            trajectory.complete(invalid=True, reason="max_steps")
+            return
+
+        # The parser also rejects over-length text; check it first so the end
+        # reason distinguishes a length limit from a formatting failure.
+        if len(trajectory.token_mask) > self.max_length:
+            trajectory.complete(invalid=True, reason="max_length")
             return
         
         # 1. Check if the last completion was valid. Yes -> Get action and action input (in lower case). No -> set invalid flag and end.
@@ -347,7 +390,7 @@ class Environment:
                 step,
                 trajectory.last_completion,
             )
-            trajectory.complete(invalid=True)
+            trajectory.complete(invalid=True, reason="invalid_format")
             return
     
         # 2. If the action is unknown, add response asking for repeat.
@@ -355,34 +398,48 @@ class Environment:
             logging.warning("Unknown model action %r at environment step %s", action, step)
             observation = "\nError: Unknown action. Valid actions are: " + ", ".join(self.possible_actions) + "." + "\n\n---\n"
             trajectory.error = True
+            trajectory.num_unknown_actions += 1
+            trajectory.actions.append(f"unknown_action:{action}")
         elif action == "test":
             # 3. If the action is known, check if the action input is valid.
             if action_input not in [test.lower() for test in self.test_list]:
                 logging.warning("Unknown test action input %r at environment step %s", action_input, step)
                 observation = "\nError: Unknown test. Only request tests as given above." + "\n\n---\n"
                 trajectory.error = True
+                trajectory.num_unknown_test_requests += 1
+                trajectory.actions.append(f"unknown_test:{action_input}")
             else:
                 # 4. If the action is test, add test results.
+                is_repeat = action_input in trajectory.requested_tests
                 result = trajectory.get_test_result(action_input)
                 observation = "\nObservation: " + result + "\n\n---\n"
+                if is_repeat:
+                    trajectory.num_repeat_requests += 1
                 if result == "not available.\n":
                     trajectory.error = True
+                    trajectory.num_unavailable_requests += 1
+                    trajectory.actions.append(f"unavailable:{action_input}")
+                else:
+                    trajectory.actions.append(f"{'repeat' if is_repeat else 'test'}:{action_input}")
         elif action == "diagnosis":
             # 3. If the action is known, check if the action input is valid.
             if action_input not in [disease.lower() for disease in self.disease_list]:
                 logging.warning("Unknown diagnosis action input %r at environment step %s", action_input, step)
                 observation = "\nError: Unknown diagnosis. Valid diagnoses are: " + ", ".join(self.disease_list) + "." + "\n\n---\n"
                 trajectory.error = True
+                trajectory.num_unknown_diagnoses += 1
+                trajectory.actions.append(f"unknown_diagnosis:{action_input}")
             else:
                 # 5. If the action is diagnosis, set it andreturn true complete flag.
                 trajectory.diagnosis = action_input
-                trajectory.complete()
+                trajectory.actions.append(f"diagnosis:{action_input}")
+                trajectory.complete(reason="diagnosis")
                 observation = None
 
         # 6. Check length of new text. If too long, set invalid flag.  
         observation_token_length = len(tokenizer.encode(observation)) if observation else 0
         if len(trajectory.token_mask) + observation_token_length > self.max_length:
-            trajectory.complete(invalid=True)
+            trajectory.complete(invalid=True, reason="max_length")
             return
 
         # 7. Add the observation to the trajectory.

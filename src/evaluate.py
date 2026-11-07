@@ -50,6 +50,9 @@ def main(cfg: DictConfig):
         loss_type=cfg.training.loss_type,
         loss_schedule=None,
         test_costs_usd=dict(cfg.evaluation.test_costs_usd),
+        # Writes test_episodes.csv, test_transcripts.jsonl and test_summary.json.
+        episode_log_dir=output_dir,
+        eval_stage_name="test",
     )
 
     # Ensure vLLM engine loads the merged LoRA weights before first generation during the first CDMGRPOTrainer._prepare_inputs call

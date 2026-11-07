@@ -28,6 +28,20 @@ class FindLatestCheckpointTest(unittest.TestCase):
             self.assertEqual(selected.name, "checkpoint-150")
             self.assertEqual(selected.parent.name, "train_full_recent")
 
+    def test_fixed_run_directory_pattern(self):
+        with tempfile.TemporaryDirectory() as directory:
+            train_dir = Path(directory)
+            for step, valid in [(275, True), (300, False)]:
+                checkpoint = train_dir / f"checkpoint-{step}"
+                checkpoint.mkdir()
+                (checkpoint / "trainer_state.json").write_text(
+                    json.dumps({"global_step": step}), encoding="utf-8"
+                )
+                if valid:
+                    (checkpoint / "optimizer.pt").touch()
+            selected = find_latest_checkpoint(train_dir, max_steps=300, pattern="checkpoint-*")
+            self.assertEqual(selected.name, "checkpoint-275")
+
     def test_no_checkpoint_starts_fresh(self):
         with tempfile.TemporaryDirectory() as directory:
             self.assertIsNone(find_latest_checkpoint(Path(directory), max_steps=300))

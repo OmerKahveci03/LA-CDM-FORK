@@ -5,9 +5,11 @@ import json
 from pathlib import Path
 
 
-def find_latest_checkpoint(outputs_dir: Path, max_steps: int) -> Path | None:
+def find_latest_checkpoint(
+    outputs_dir: Path, max_steps: int, pattern: str = "train_full_*/checkpoint-*"
+) -> Path | None:
     candidates = []
-    for checkpoint in outputs_dir.glob("train_full_*/checkpoint-*"):
+    for checkpoint in outputs_dir.glob(pattern):
         if not checkpoint.is_dir() or not checkpoint.name.removeprefix("checkpoint-").isdigit():
             continue
         state_path = checkpoint / "trainer_state.json"
@@ -29,7 +31,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("outputs_dir", type=Path)
     parser.add_argument("--max-steps", type=int, required=True)
+    parser.add_argument(
+        "--pattern",
+        default="train_full_*/checkpoint-*",
+        help="Glob below outputs_dir; use checkpoint-* for one fixed run directory.",
+    )
     args = parser.parse_args()
-    checkpoint = find_latest_checkpoint(args.outputs_dir, args.max_steps)
+    checkpoint = find_latest_checkpoint(args.outputs_dir, args.max_steps, args.pattern)
     if checkpoint is not None:
         print(checkpoint.resolve())

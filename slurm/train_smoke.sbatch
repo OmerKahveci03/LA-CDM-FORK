@@ -14,7 +14,7 @@ set -euo pipefail
 
 REPO_DIR=/blue/prismap-ai-core/omerkahveci/LA-CDM-FORK
 PYTHON_BIN=/blue/prismap-ai-core/omerkahveci/envs/la-cdm/bin/python
-RUN_DIR="outputs/train_smoke_${SLURM_JOB_ID}"
+RUN_DIR="outputs/train_smoke/$(date +%Y%m%d-%H%M%S)"
 
 if [[ ! -x "$PYTHON_BIN" ]]; then
     echo "Missing Python executable: $PYTHON_BIN" >&2

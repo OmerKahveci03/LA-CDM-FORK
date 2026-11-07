@@ -51,6 +51,9 @@ from trl.trainer.callbacks import SyncRefModelCallback
 from trl.trainer.utils import pad, selective_log_softmax
 from trl.data_utils import maybe_apply_chat_template, is_conversational, apply_chat_template
 from src.utils.metrics import calculate_classification_metrics
+from src.utils import episode_log
+from pathlib import Path
+import json
 from src.trainer.loss_scheduler import LossScheduler
 from src.environment.environment import EnvironmentOutput
 
@@ -108,6 +111,8 @@ class CDMGRPOTrainer(GRPOTrainer):
         conf_cal_reward_func=None,
         loss_schedule=None,
         test_costs_usd: Optional[dict[str, float]] = None,
+        episode_log_dir: Optional[str] = None,
+        eval_stage_name: str = "val",
     ):
         # Args
         if args is None:
@@ -368,7 +373,13 @@ class CDMGRPOTrainer(GRPOTrainer):
         self.completion_lengths = []
         self.kls = []
         self.sft_ha_losses = []
-        
+        # Per-episode observability. Training rows are appended every step;
+        # evaluation rows are buffered and written when evaluation logs.
+        self.episode_log_dir = Path(episode_log_dir) if episode_log_dir else None
+        self.eval_stage_name = eval_stage_name
+        self.eval_episode_rows = []
+        self.eval_episode_records = []
+
         # Initialize loss scheduler if configuration is provided
         if loss_schedule is not None:
             self.loss_scheduler = LossScheduler(
@@ -652,6 +663,7 @@ class CDMGRPOTrainer(GRPOTrainer):
         mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
         std_grouped_rewards = std_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
         advantages = (rewards - mean_grouped_rewards) / (std_grouped_rewards + 1e-4)
+        all_advantages = advantages
 
         process_slice = slice(
             self.accelerator.process_index * len(prompts),
@@ -678,7 +690,72 @@ class CDMGRPOTrainer(GRPOTrainer):
             "rewards": rewards,
             "completions_text": completions_text,
             "reward_kwargs": reward_kwargs,
+            "rewards_per_func": rewards_per_func,
+            "all_advantages": all_advantages,
         }
+
+    def _reward_func_names(self) -> list[str]:
+        names = []
+        for reward_func in self.reward_funcs:
+            if isinstance(reward_func, nn.Module):
+                names.append(reward_func.config._name_or_path.split("/")[-1])
+            else:
+                names.append(reward_func.__name__)
+        return names
+
+    def _current_phase_name(self) -> str:
+        if self.da_loss_weight != 0.0:
+            return "da"
+        if self.ha_sft_loss_weight != 0.0:
+            return "ha_sft"
+        if self.ha_conf_cal_loss_weight != 0.0:
+            return "ha_conf_cal"
+        return ""
+
+    def _record_episodes(self, env_output, da) -> None:
+        """Turn this batch's episodes into rows and persist or buffer them."""
+        if not self.accelerator.is_main_process or not env_output.episode_records:
+            return
+        training = self.model.training
+        rows = episode_log.build_episode_rows(
+            env_output.episode_records,
+            stage="train" if training else self.eval_stage_name,
+            # During training the row belongs to the step being computed.
+            step=self.state.global_step + 1 if training else self.state.global_step,
+            phase=self._current_phase_name() if training else "",
+            reward_names=self._reward_func_names(),
+            rewards_per_func=da["rewards_per_func"].tolist(),
+            advantages=da["all_advantages"].tolist() if training else None,
+            test_costs_usd=self.test_costs_usd,
+        )
+        if training:
+            for key, value in episode_log.group_signal_flags(rows).items():
+                self._metrics[f"episodes/{key}"].append(value)
+            if self.episode_log_dir is not None:
+                episode_log.append_rows(self.episode_log_dir / "train_episodes.csv", rows)
+        else:
+            self.eval_episode_rows.extend(rows)
+            self.eval_episode_records.extend(env_output.episode_records)
+
+    def _write_eval_episodes(self, logs: dict) -> None:
+        """Add per-disease metrics to ``logs`` and write the evaluation files."""
+        rows, records = self.eval_episode_rows, self.eval_episode_records
+        self.eval_episode_rows, self.eval_episode_records = [], []
+        if not rows or not self.accelerator.is_main_process:
+            return
+        tests = list((self.test_costs_usd or {}).keys())
+        summary = episode_log.summarize(rows, tests=tests)
+        logs.update(episode_log.flatten_summary(summary, prefix="eval_"))
+        if self.episode_log_dir is None:
+            return
+        if self.eval_stage_name == "val":
+            name = f"val_step_{self.state.global_step:04d}"
+        else:
+            name = self.eval_stage_name
+        episode_log.write_rows(self.episode_log_dir / f"{name}_episodes.csv", rows)
+        episode_log.write_transcripts(self.episode_log_dir / f"{name}_transcripts.jsonl", rows, records)
+        with (self.episode_log_dir / f"{name}_summary.json").open("w", encoding="utf-8") as handle:
+            json.dump({"step": self.state.global_step, **summary}, handle, indent=2)
 
     def _log_completions(self, prompts_text, completions_text, reward_kwargs, rewards, env_output):
         """Log a sample of completions to wandb as a table."""
@@ -770,6 +847,7 @@ class CDMGRPOTrainer(GRPOTrainer):
         self._log_completions(
             prompts_text, da["completions_text"], da["reward_kwargs"], da["rewards"], env_output,
         )
+        self._record_episodes(env_output, da)
 
         return {
             "prompt_ids": prompt_ids,
@@ -1181,6 +1259,8 @@ class CDMGRPOTrainer(GRPOTrainer):
                 )
                 logs["eval_avg_diagnostic_cost"] = total_cost / n
                 logs["eval_avg_num_tests"] = sum(len(t) for t in self.eval_provided_tests) / n
+
+            self._write_eval_episodes(logs)
 
             # clear eval buffers
             self.eval_preds.clear()
