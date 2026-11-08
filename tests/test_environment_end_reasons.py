@@ -55,7 +55,7 @@ class EnvironmentEndReasonTest(unittest.TestCase):
         env, trajectory = make_env(), make_trajectory()
         act(env, trajectory, action("Test", "CT"), 0)
         act(env, trajectory, action("Test", "Ultrasound"), 1)
-        act(env, trajectory, action("Test", "Complete Blood Count (CBC)"), 2)
+        act(env, trajectory, action("Test", "Lipase"), 2)
         act(env, trajectory, action("Test", "CT"), 3)
         act(env, trajectory, action("Diagnosis", "appendicitis"), 4)
 
@@ -65,13 +65,25 @@ class EnvironmentEndReasonTest(unittest.TestCase):
         self.assertEqual(trajectory.num_turns, 5)
         self.assertEqual(
             trajectory.actions,
-            ["test:ct", "unavailable:ultrasound", "unknown_test:complete blood count (cbc)",
+            ["test:ct", "unavailable:ultrasound", "unknown_test:lipase",
              "repeat:ct", "diagnosis:appendicitis"],
         )
         self.assertEqual(trajectory.provided_tests, ["ct"])
         self.assertEqual(trajectory.num_unavailable_requests, 1)
         self.assertEqual(trajectory.num_unknown_test_requests, 1)
         self.assertEqual(trajectory.num_repeat_requests, 1)
+
+    def test_bracketed_abbreviation_matches_listed_test(self):
+        env, trajectory = make_env(), make_trajectory()
+        act(env, trajectory, action("Test", "Complete Blood Count (CBC)"), 0)
+        self.assertEqual(trajectory.actions, ["test:complete blood count"])
+        self.assertEqual(trajectory.provided_tests, ["complete blood count"])
+        self.assertEqual(trajectory.num_unknown_test_requests, 0)
+
+    def test_bracket_does_not_rescue_unlisted_test(self):
+        env, trajectory = make_env(), make_trajectory()
+        act(env, trajectory, action("Test", "Serum Lipase (lipase)"), 0)
+        self.assertEqual(trajectory.actions, ["unknown_test:serum lipase (lipase)"])
 
     def test_wrong_but_valid_diagnosis_ends_episode(self):
         env, trajectory = make_env(), make_trajectory()

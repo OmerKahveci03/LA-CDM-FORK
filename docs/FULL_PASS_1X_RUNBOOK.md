@@ -1,7 +1,61 @@
 # Full-pass 1x baseline: runbook and record
 
-Started: November 7, 2026. **Current position: Step 4 (early checks). Steps 1–2 passed;
-Step 3 submitted November 7 — training chain 50132293–50132297, zero-shot 50132298.**
+Started: November 7, 2026. **Current position: attempt 1 collapsed (see section 0);
+restart as attempt 2 with the fixes below, from Step 3a.**
+
+## 0. Attempt 1 collapsed — what happened and what changed
+
+Attempt 1 (training chain 50132293–50132297) never learned to diagnose:
+
+| Val step | Undiagnosed | Accuracy | Tests/case | Turns |
+|---|---:|---:|---:|---:|
+| 0 (untrained) | 96.9% | 2.4% | 0.90 | 2.25 |
+| 100 | 98.6% | 1.1% | 0.79 | 2.12 |
+| 200 | 98.3% | 1.4% | 0.68 | 2.10 |
+| 300 | 97.5% | 1.5% | 0.75 | 2.16 |
+| 400 | 100.0% | 0.0% | 0.15 | 2.01 |
+| 500 | 99.8% | 0.1% | 0.14 | 2.02 |
+
+The first DA phase (steps 1–100) never escaped the untrained model's format
+failures. The second DA phase (301–400) then learned to stop before ordering a test.
+Hypothesis accuracy stayed at ~67%, so the HA was fine. Only the DA's actions failed.
+
+**Cause.** In the collapsed 1.5x log, 4,012 of 4,061 format failures (99%) are on
+the DA's **second** action. Either the model answers a test result as if it were the
+user ("Please provide the next step."), or it asks for `Complete Blood Count (CBC)`,
+is told the test is unknown (1,407 times), and replies to the error. The paper's
+reward charged test cost even to invalid episodes. So in a group where all 4 rollouts
+failed, the one that failed before ordering anything got the highest reward, and
+GRPO turned that into a full-strength "fail fast" advantage. The successful
+October 1.0x run escaped by chance in its first DA phase. This run and the 1.5x
+arm did not. The November 7 logging changes did not cause this: the training
+settings are identical.
+
+**Fixes for attempt 2** (all deviations from the paper, to report as such):
+
+| Change | Files |
+|---|---|
+| Test cost is not charged to invalid episodes (`charge_invalid: false`); an all-failed group ties and gets zero advantage | `src/reward_function/test_cost_reward.py`, `configs/reward_function/defaults.yaml` |
+| A listed test name followed by a bracketed abbreviation (`Complete Blood Count (CBC)`) counts as that test | `src/environment/environment.py` (`_match_test_name`) |
+| Collapse guard: at any validation from step 200 on, ≥95% undiagnosed stops training, writes `train/collapse_detected.json`, and queued jobs then exit | `src/train.py`, `configs/training/defaults.yaml`, `slurm/train_cost_sweep.sbatch` |
+| `charge_invalid=false` is part of the arm's settings lock, so the attempt-1 directory cannot be resumed by mistake | `slurm/train_cost_sweep.sbatch` |
+
+The CBC change also affects evaluation, so the zero-shot baseline must be run on
+this code too (Step 3a).
+
+### Step 3a — Restart (attempt 2)
+```bash
+squeue -u omerkahveci                                  # cancel any attempt-1 training job still listed:
+scancel 50132293 50132294 50132295 50132296 50132297
+git pull && git log --oneline -1 && git status
+mv outputs/cost_sweep/cost_1 outputs/cost_sweep/cost_1_attempt1_collapsed
+# zero-shot: if 50132298 ran before the pull, move its output and rerun on the new code
+mv outputs/zero_shot outputs/zero_shot_attempt1_code    # only if it exists
+python -m unittest tests.test_test_cost_reward_multiplier tests.test_environment_end_reasons
+```
+Then run Step 3 unchanged (it submits the chain and the zero-shot job).
+**Go/no-go at step 100 validation:** undiagnosed should be clearly below step 0's
+~97%. If it isn't by step 200, the guard stops the run by itself.
 
 This file is the single place to resume this experiment after time away. Tick the
 checkboxes and fill in the record table as steps complete. Results go into
@@ -189,7 +243,7 @@ Earlier runs (`outputs/cost_sweep/cost_0/`, `cost_1p5/`, `train_full_*/`, `adapt
 | Best validation step (chosen for testing) | |
 | Step-1,800 validation / test accuracy | |
 | Step-1,920 validation / test accuracy | |
-| Warnings, failures, restarts | |
+| Warnings, failures, restarts | Attempt 1 (50132293–97) collapsed: 97% undiagnosed at step 0, 100% by step 400; moved to `outputs/cost_sweep/cost_1_attempt1_collapsed/`. Restarted with the section-0 fixes. |
 
 ## 6. Facts to carry into the report
 

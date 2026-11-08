@@ -13,6 +13,12 @@ log_completions: true
 eval_strategy: "steps"
 eval_steps: 100
 eval_on_start: false
+# Stop training when validation shows the decision agent never left the
+# untrained "fails format" state (or collapsed back into it). Checked at every
+# validation from min_step on; min_step <= 0 disables the guard.
+collapse_guard:
+  min_step: 200
+  max_undiagnosed: 0.95
 
 # Training hyperparameters
 learning_rate: 1e-5

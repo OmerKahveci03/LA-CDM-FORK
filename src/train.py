@@ -66,6 +66,55 @@ class FinalEvaluationCallback(TrainerCallback):
         return control
 
 
+COLLAPSE_MARKER = "collapse_detected.json"
+
+
+class CollapseGuardCallback(TrainerCallback):
+    """Stop training when validation stays (or falls back) near 100% undiagnosed.
+
+    The untrained model fails the action format on ~97% of validation rollouts.
+    A run that is still there after a full Decision Agent phase will not
+    recover by itself (full-pass 1x attempt 1: 97% at step 0, 100% at step
+    400), so continuing only burns GPU days. The marker file makes queued
+    Slurm jobs for the same arm exit instead of resuming.
+    """
+
+    def __init__(self, output_dir: Path, min_step: int, max_undiagnosed: float) -> None:
+        self.output_dir = Path(output_dir)
+        self.min_step = min_step
+        self.max_undiagnosed = max_undiagnosed
+        self.triggered = False
+
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        if self.min_step <= 0 or state.global_step < self.min_step or not metrics:
+            return control
+        undiagnosed = metrics.get("eval_none_fraction")
+        if undiagnosed is None:
+            logging.warning("Collapse guard: eval_none_fraction missing from validation metrics")
+            return control
+        if undiagnosed >= self.max_undiagnosed:
+            self.triggered = True
+            control.should_training_stop = True
+            logging.error(
+                "Collapse guard: %.1f%% of validation rollouts undiagnosed at step %d (limit %.1f%%); stopping",
+                100 * undiagnosed, state.global_step, 100 * self.max_undiagnosed,
+            )
+            if state.is_world_process_zero:
+                (self.output_dir / COLLAPSE_MARKER).write_text(
+                    json.dumps(
+                        {
+                            "global_step": state.global_step,
+                            "undiagnosed_fraction": undiagnosed,
+                            "max_undiagnosed": self.max_undiagnosed,
+                            "detected_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+        return control
+
+
 def resumed_step(checkpoint: str | None) -> int | None:
     if not checkpoint:
         return None
@@ -101,6 +150,12 @@ def main(cfg: DictConfig):
 
     loss_schedule = cfg.training.loss_schedule if hasattr(cfg.training, "loss_schedule") else None
     cycle_steps = sum(phase.steps for phase in loss_schedule.phases) if loss_schedule else 0
+    guard_cfg = cfg.training.get("collapse_guard") or {}
+    collapse_guard = CollapseGuardCallback(
+        output_dir,
+        min_step=int(guard_cfg.get("min_step", 0)),
+        max_undiagnosed=float(guard_cfg.get("max_undiagnosed", 1.0)),
+    )
 
     trainer = CDMGRPOTrainer(
         model=model,
@@ -116,12 +171,16 @@ def main(cfg: DictConfig):
         test_costs_usd=dict(cfg.evaluation.test_costs_usd),
         episode_log_dir=str(episode_dir),
         eval_stage_name="val",
-        callbacks=[AdapterSnapshotCallback(output_dir, cycle_steps), FinalEvaluationCallback()],
+        callbacks=[AdapterSnapshotCallback(output_dir, cycle_steps), FinalEvaluationCallback(), collapse_guard],
     )
 
     trainer.train(resume_from_checkpoint=cfg.training.resume_from_checkpoint)
     trainer.save_model(str(output_dir))
     final_step = trainer.state.global_step
+    if collapse_guard.triggered:
+        # No completion marker: the run did not finish, it was stopped.
+        wandb.finish()
+        raise SystemExit(f"Training stopped by the collapse guard at step {final_step}; see {COLLAPSE_MARKER}")
     if trainer.is_world_process_zero():
         snapshot = adapter_snapshot_path(output_dir, final_step)
         if not snapshot.exists():

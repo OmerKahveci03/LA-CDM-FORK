@@ -56,7 +56,10 @@ trap 'rc=$?; log_job "train exit=$rc"' EXIT
 
 # Settings that change what the model learns and so must not change between
 # jobs of the same arm. MAX_STEPS is excluded so a finished arm can be extended.
-SETTINGS="cost_multiplier=$COST_MULTIPLIER num_generations=4 batch_size=1 max_completion_length=128 max_length=2048"
+# charge_invalid=false: invalid episodes are not charged for tests (see
+# configs/reward_function/defaults.yaml); arms trained before this change used
+# the paper's reward and have no such field, so they cannot be resumed with it.
+SETTINGS="cost_multiplier=$COST_MULTIPLIER num_generations=4 batch_size=1 max_completion_length=128 max_length=2048 charge_invalid=false"
 if [[ -f "$RUN_ROOT/run_settings.txt" ]]; then
     if [[ "$(cat "$RUN_ROOT/run_settings.txt")" != "$SETTINGS" ]]; then
         echo "[SLURM] Settings differ from this arm's first job:" >&2
@@ -66,6 +69,14 @@ if [[ -f "$RUN_ROOT/run_settings.txt" ]]; then
     fi
 else
     echo "$SETTINGS" > "$RUN_ROOT/run_settings.txt"
+fi
+
+if [[ -f "$TRAIN_DIR/collapse_detected.json" ]]; then
+    echo "[SLURM] $ARM was stopped by the collapse guard; not resuming:" >&2
+    cat "$TRAIN_DIR/collapse_detected.json" >&2
+    log_job "collapse marker present; not resuming"
+    trap - EXIT
+    exit 0
 fi
 
 if [[ -f "$TRAIN_DIR/training_complete.json" ]]; then

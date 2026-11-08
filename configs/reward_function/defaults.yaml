@@ -22,6 +22,10 @@ reward_functions:
       electrolyte panel: -0.0132
     single_cost: false
     multiplier: 1.0
+    # Deviation from the paper: invalid episodes are not charged for tests, so
+    # failing before ordering a test is never the best rollout in a group.
+    # See docs/FULL_PASS_1X_RUNBOOK.md (attempt 1 collapse).
+    charge_invalid: false
 
 conf_cal_reward_func:
   _target_: src.reward_function.conf_cal_reward.ConfidenceCalibrationReward

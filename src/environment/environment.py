@@ -402,6 +402,7 @@ class Environment:
             trajectory.actions.append(f"unknown_action:{action}")
         elif action == "test":
             # 3. If the action is known, check if the action input is valid.
+            action_input = self._match_test_name(action_input)
             if action_input not in [test.lower() for test in self.test_list]:
                 logging.warning("Unknown test action input %r at environment step %s", action_input, step)
                 observation = "\nError: Unknown test. Only request tests as given above." + "\n\n---\n"
@@ -446,6 +447,20 @@ class Environment:
         if observation:
             new_text = trajectory.text + observation
             trajectory.text = new_text
+
+    def _match_test_name(self, action_input: str) -> str:
+        """Accept a listed test name followed by a bracketed abbreviation.
+
+        Llama often writes ``Complete Blood Count (CBC)``; the 1.5x training log
+        has 1,407 such requests rejected as unknown tests. Drop a trailing
+        bracketed part only when what remains is a listed test, so unlisted
+        tests such as ``Lipase`` stay unknown.
+        """
+        tests = [test.lower() for test in self.test_list]
+        if action_input in tests:
+            return action_input
+        stripped = re.sub(r"\s*\([^()]*\)\s*$", "", action_input)
+        return stripped if stripped in tests else action_input
 
     def _generate_hypothesis(self, trajectories: list[Trajectory], model, sampling_params, processing_class) -> list[str]:
         """Generate a hypothesis (and optional confidence) for each active trajectory."""
