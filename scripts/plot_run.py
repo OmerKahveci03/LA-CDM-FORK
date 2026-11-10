@@ -149,7 +149,9 @@ def y_format(ax, kind: str, top: float) -> None:
 
     ax.set_ylim(0, 1 if kind == "pct" else (top * 1.15 if top > 0 else 1))
     if kind in ("pct", "pct_auto"):
-        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{100 * v:.0f}%"))
+        # Small shares (e.g. 0.1% turn-limit endings) need decimals or every tick reads "0%".
+        decimals = 0 if kind == "pct" or top >= 0.05 else (1 if top >= 0.005 else 2)
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{100 * v:.{decimals}f}%"))
     elif kind == "money":
         ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"${v:,.2f}" if top < 10 else f"${v:,.0f}"))
     else:

@@ -1,7 +1,8 @@
 # Full-pass 1x baseline: runbook and record
 
 Started: November 7, 2026. **Current position: attempt 2 running (job 50189200, started Nov 8); step-100 go/no-go
-passed (42.5% val accuracy). Now Step 6 (during the run). Attempt 1 collapsed (section 0).**
+passed (42.5% val accuracy). Now Step 6 (during the run), ~step 1,600 on Nov 9. Findings so far:
+section 6a (drift to zero tests, HA calibration degrading). Attempt 1 collapsed (section 0).**
 
 ## 0. Attempt 1 collapsed — what happened and what changed
 
@@ -295,6 +296,62 @@ Earlier runs (`outputs/cost_sweep/cost_0/`, `cost_1p5/`, `train_full_*/`, `adapt
   `FormatReward` = 1 − undiagnosed share; hypothesis accuracy and ECE are over
   every HA call, not per patient; tests/cost per case count only tests that
   returned a result and include undiagnosed cases.
+
+## 6a. Findings from attempt 2 (recorded November 9, 2026, at ~step 1,600)
+
+Training was still running; final numbers to be added when it finishes. Figures:
+`scripts/plot_run.py`; calibration table: `scripts/calibration_by_call.py`.
+
+**1. Format solved early; accuracy plateaus from ~step 300.** Validation undiagnosed
+fell from 95.9% (step 0) to ~5–10% by step 200 and stayed there. Training-rollout
+accuracy plateaued at ~60–80% from step ~200 (the October 1x run, which also had good
+format, scored 69% on test after 300 steps).
+
+**2. The DA drifts to ordering no tests.** Average tests per training rollout peaked at
+~1.7 (step ~100), fell steadily, and collapsed to ~0.05 in the DA phase at steps
+1,500–1,600; validation tests per case fell from 1.68 (step 100) to ~0.05 (step 1,600),
+with the median at 0 from step 1,300. "Patients where only test cost differed" reached
+~70% of training steps around step 1,450: once the 4 rollouts agree on the diagnosis,
+test cost is the only remaining signal, so it keeps pushing toward zero tests. Not caused
+by the attempt-2 gating (valid episodes are charged exactly as in the paper); it is the
+paper's cost reward over 1,920 steps instead of 300. The paper's LA-CDM still spent
+$1,295.61 per patient on test (its Table 1; it reports cost, not test counts).
+
+**3. HA calibration degrades: confidence inflates, accuracy does not change.** ECE rose
+from ~6–7% (steps 0–500) to 12–22% (steps 600–1,600). Split by call type
+(conf = mean confidence/10, acc = share correct):
+
+| Step | History-only conf / acc | After a test conf / acc | After-test calls |
+|---|---|---|---:|
+| 0 | 0.64 / 0.63 | 0.69 / 0.72 | 924 |
+| 300 | 0.68 / 0.59 | 0.75 / 0.73 | 1,414 |
+| 500 | 0.69 / 0.62 | 0.76 / 0.77 | 1,155 |
+| 600 | 0.82 / 0.63 | 0.87 / 0.77 | 1,087 |
+| 900 | 0.68 / 0.54 | 0.75 / 0.62 | 1,081 |
+| 1,200 | 0.77 / 0.62 | 0.85 / 0.78 | 514 |
+| 1,400 | 0.93 / 0.68 | 0.97 / 0.84 | 430 |
+| 1,600 | 0.79 / 0.65 | 0.84 / 0.67 | 51 |
+
+Overconfidence appears in **both** call types, so it is not just the shift toward
+history-only calls (that shift adds a little: after-test calls fall from ~1,500 to 51).
+Confidence moves in jumps tied to phases: up after the calibration phase ending at 600,
+after HA-SFT ending at 1,100 and after DA ending at 1,400; back down after calibration
+ending at 900 and 1,500. Likely mechanism (inferred, not verified): one shared LoRA
+adapter serves both agents, so DA and HA-SFT updates move the confidence outputs, and
+each 100-step calibration phase (1 sampled hypothesis x 4 confidences per step) is too
+weak to hold calibration. To check: `rewards/ha_conf_cal` per step in `train_output.log`.
+
+**4. Tests help the HA.** After-test HA calls are right 67–84% of the time versus 54–68%
+for history-only calls, so the DA's drift to zero tests discards useful information.
+
+**Checkpoint plan (pending final validation):** steps 300 or 600 look best behaved
+(accuracy at its plateau, tests still used, calibration gap ≤ +0.05 at step 300); test
+1,800 and 1,920 as well to document the no-test drift.
+
+**Fix ideas to try next (not started):** for the test drift, a smaller cost multiplier,
+stopping at the validation-chosen step, or a stronger KL penalty; for calibration,
+shorter phase cycles or joint (every-step) calibration, separate adapters per agent, or
+more calibration samples per step. Compare each against attempt 2 at matched steps.
 
 ## 7. Open items after this run
 
