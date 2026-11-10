@@ -48,6 +48,7 @@ def load_curve(train_dir: Path) -> list[dict]:
             "accuracy_diagnosed": overall["accuracy_diagnosed"],
             "macro_f1": overall.get("macro_f1"),
             "tests_per_case": overall["avg_num_tests"],
+            "turns": overall.get("avg_turns"),
             "cost_usd": overall["avg_cost_usd"],
             "hypothesis_accuracy": overall["hypothesis_accuracy"],
             "ece": overall.get("ece"),

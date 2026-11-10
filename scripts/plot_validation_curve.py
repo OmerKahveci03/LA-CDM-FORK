@@ -13,8 +13,10 @@ record test cost).
         --out figures/validation
 
 Writes ``<out>_overview.{pdf,png}`` (overall accuracy, undiagnosed share and
-cost per case) and ``<out>_per_disease.{pdf,png}`` (accuracy for each disease),
-plus ``<out>_points.csv`` with every plotted value. The untrained model is the
+cost per case), ``<out>_per_disease.{pdf,png}`` (accuracy for each disease),
+``<out>_details.{pdf,png}`` (diagnosed-only accuracy, macro F1, tests per case,
+turns, hypothesis accuracy, calibration error, and how episodes ended; summary-file
+runs only), plus ``<out>_points.csv`` with every plotted value. The untrained model is the
 same for every arm, so a step-0 point measured in one run is shown for all
 runs that lack one (disable with ``--no-shared-step0``).
 """
@@ -36,6 +38,24 @@ from src.utils.episode_log import DISEASES
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
 SURFACE, INK, INK_2, MUTED, GRID, AXIS = "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
 CYCLE, PHASES = 300, ("DA", "HA-SFT", "Calib.")
+
+
+OVERVIEW = [
+    ("accuracy", "Accuracy (undiagnosed counted wrong)", "pct"),
+    ("undiagnosed", "Undiagnosed share", "pct"),
+    ("cost_usd", "Test cost per case (USD)", "money"),
+]
+DETAILS = [
+    ("accuracy_diagnosed", "Accuracy among diagnosed episodes", "pct"),
+    ("macro_f1", "Macro F1 (diseases weighted equally)", "pct"),
+    ("hypothesis_accuracy", "Hypothesis Agent accuracy (every call)", "pct"),
+    ("tests_per_case", "Tests that returned a result, per case", "number"),
+    ("turns", "Decision Agent turns per case", "number"),
+    ("ece", "Calibration error of HA confidence (ECE)", "pct_auto"),
+    ("invalid_format", "Ended: unparseable action", "pct_auto"),
+    ("max_length", "Ended: hit the token limit", "pct_auto"),
+    ("max_steps", "Ended: hit the turn limit", "pct_auto"),
+]
 
 
 def points_from_log(path: Path, eval_steps: int) -> list[dict]:
@@ -67,7 +87,9 @@ def load_run(path: Path, eval_steps: int) -> list[dict]:
     return points_from_log(path, eval_steps)
 
 
-def style_axis(ax, title: str, percent: bool, money: bool, max_step: int) -> None:
+def style_axis(ax, title: str, kind: str, max_step: int) -> None:
+    """``kind``: "pct" (fixed 0-100%), "pct_auto" (percent, range from the data),
+    "money" (USD, range from the data) or "number" (range from the data)."""
     from matplotlib.ticker import FuncFormatter, MultipleLocator
 
     ax.set_facecolor(SURFACE)
@@ -78,16 +100,18 @@ def style_axis(ax, title: str, percent: bool, money: bool, max_step: int) -> Non
     ax.tick_params(colors=MUTED, labelsize=8, length=0, pad=4)
     ax.grid(axis="y", color=GRID, linewidth=0.8, linestyle="-")
     ax.set_axisbelow(True)
-    if percent:
+    # For every kind except "pct" the y-range is set after plotting, from the data.
+    if kind == "pct":
         ax.set_ylim(0, 1)
+    if kind in ("pct", "pct_auto"):
         ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{100 * v:.0f}%"))
-    elif money:
-        # The y-range is set after plotting, from the data.
+    elif kind == "money":
         ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"${v:,.0f}"))
     ax.set_xlim(-max_step * 0.02, max_step * 1.02)
     ax.xaxis.set_major_locator(MultipleLocator(100 if max_step <= 900 else CYCLE))
     # Phase boundaries: faint every 100 steps, slightly stronger at cycle ends.
-    for step in range(100, max_step + 1, 100):
+    # Long runs show cycle ends only, so the boundaries do not crowd the data.
+    for step in range(100, max_step + 1, 100 if max_step <= 900 else CYCLE):
         ax.axvline(step, color=GRID if step % CYCLE else AXIS, linewidth=0.8, zorder=0)
     if max_step <= 900:
         for start in range(0, max_step, 100):
@@ -102,8 +126,11 @@ def draw(ax, runs: dict, key: str, colors: dict, label_ends: bool) -> bool:
         if not series:
             continue
         xs, ys = zip(*series)
+        # Many closely spaced points: smaller markers, so the ring gaps do not make the line look dashed.
+        dense = len(series) > 10
         ax.plot(xs, ys, color=colors[name], linewidth=1.5, solid_capstyle="round", solid_joinstyle="round",
-                marker="o", markersize=5, markeredgecolor=SURFACE, markeredgewidth=1.5, label=name,
+                marker="o", markersize=3.5 if dense else 5, markeredgecolor=SURFACE,
+                markeredgewidth=0.8 if dense else 1.5, label=name,
                 clip_on=False, zorder=3)
         # A lone point (e.g. only the shared step 0) is identified by the legend.
         if label_ends and len(series) >= 2:
@@ -119,15 +146,16 @@ def figure(runs, colors, panels, path_stem: Path, columns: int, max_step: int) -
     rows = (len(panels) + columns - 1) // columns
     fig, axes = plt.subplots(rows, columns, figsize=(3.6 * columns, 2.9 * rows), squeeze=False)
     fig.patch.set_facecolor(SURFACE)
-    for ax, (key, title, percent, money) in zip(axes.flat, panels):
-        style_axis(ax, title, percent, money, max_step)
-        if not draw(ax, runs, key, colors, label_ends=len(runs) <= 4):
+    for ax, (key, title, kind) in zip(axes.flat, panels):
+        style_axis(ax, title, kind, max_step)
+        # A single run needs no labels: the title names what is plotted.
+        if not draw(ax, runs, key, colors, label_ends=2 <= len(runs) <= 4):
             ax.text(0.5, 0.5, "not recorded for these runs", transform=ax.transAxes,
                     ha="center", va="center", fontsize=8, color=MUTED)
             ax.set_yticks([])
-        elif money:
+        elif kind != "pct":
             top = max(p[key] for points in runs.values() for p in points if p.get(key) is not None)
-            ax.set_ylim(0, top * 1.15)
+            ax.set_ylim(0, top * 1.15 if top > 0 else 1)
         ax.set_xlabel("Patients trained on (steps)", fontsize=8, color=INK_2)
     for ax in list(axes.flat)[len(panels):]:
         ax.set_visible(False)
@@ -180,23 +208,20 @@ def main() -> None:
     colors = {name: SERIES[i] for i, name in enumerate(runs)}
     max_step = max(p["step"] for points in runs.values() for p in points)
     args.out.parent.mkdir(parents=True, exist_ok=True)
+    figure(runs, colors, OVERVIEW, args.out.with_name(args.out.name + "_overview"), columns=3, max_step=max_step)
     figure(runs, colors, [
-        ("accuracy", "Accuracy (undiagnosed counted wrong)", True, False),
-        ("undiagnosed", "Undiagnosed share", True, False),
-        ("cost_usd", "Test cost per case (USD)", False, True),
-    ], args.out.with_name(args.out.name + "_overview"), columns=3, max_step=max_step)
-    figure(runs, colors, [
-        (f"accuracy_{d}", f"{d.capitalize()}: accuracy", True, False) for d in DISEASES
+        (f"accuracy_{d}", f"{d.capitalize()}: accuracy", "pct") for d in DISEASES
     ], args.out.with_name(args.out.name + "_per_disease"), columns=2, max_step=max_step)
+    figure(runs, colors, DETAILS, args.out.with_name(args.out.name + "_details"), columns=3, max_step=max_step)
 
-    keys = ["step", "accuracy", "undiagnosed", "cost_usd"] + [f"accuracy_{d}" for d in DISEASES]
+    keys = ["step"] + [k for k, _, _ in OVERVIEW + DETAILS] + [f"accuracy_{d}" for d in DISEASES]
     with args.out.with_name(args.out.name + "_points.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
         writer.writerow(["run"] + keys)
         for name, points in runs.items():
             for point in points:
                 writer.writerow([name] + [point.get(k) for k in keys])
-    print(f"Wrote {args.out}_overview.pdf/.png, {args.out}_per_disease.pdf/.png, {args.out}_points.csv")
+    print(f"Wrote {args.out}_overview, _per_disease and _details (.pdf/.png) and {args.out}_points.csv")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 # Full-pass 1x baseline: runbook and record
 
-Started: November 7, 2026. **Current position: attempt 1 collapsed (see section 0);
-restart as attempt 2 with the fixes below, from Step 3a.**
+Started: November 7, 2026. **Current position: attempt 2 running (job 50189200, started Nov 8); step-100 go/no-go
+passed (42.5% val accuracy). Now Step 6 (during the run). Attempt 1 collapsed (section 0).**
 
 ## 0. Attempt 1 collapsed — what happened and what changed
 
@@ -51,9 +51,16 @@ git pull && git log --oneline -1 && git status
 mv outputs/cost_sweep/cost_1 outputs/cost_sweep/cost_1_attempt1_collapsed
 # zero-shot: if 50132298 ran before the pull, move its output and rerun on the new code
 mv outputs/zero_shot outputs/zero_shot_attempt1_code    # only if it exists
-python -m unittest tests.test_test_cost_reward_multiplier tests.test_environment_end_reasons
+$PY -m unittest tests.test_test_cost_reward_multiplier tests.test_environment_end_reasons
 ```
-Then run Step 3 unchanged (it submits the chain and the zero-shot job).
+Run it with the env's Python (`PY=/blue/prismap-ai-core/omerkahveci/envs/la-cdm/bin/python`,
+see section 3). Then run Step 3 unchanged (it submits the chain and the zero-shot job).
+Check validation as it comes in:
+```bash
+for f in outputs/cost_sweep/cost_1/train/episodes/val_step_0*_summary.json; do
+  $PY -c "import json,sys; s=json.load(open(sys.argv[1])); o=s['overall']; print(s['step'], 'undiagnosed=%.3f' % o['undiagnosed_fraction'], 'acc=%.3f' % o['accuracy'], 'tests=%.2f' % o['avg_num_tests'])" "$f"
+done
+```
 **Go/no-go at step 100 validation:** undiagnosed should be clearly below step 0's
 ~97%. If it isn't by step 200, the guard stops the run by itself.
 
@@ -117,6 +124,11 @@ episode that exceeds the token limit is now recorded as `max_length` instead of
 ## 3. Runbook
 
 All commands run on HiPerGator from `/blue/prismap-ai-core/omerkahveci/LA-CDM-FORK`.
+`$PY` is the la-cdm conda env's Python (the same one the Slurm scripts use); set it
+once per shell:
+```bash
+PY=/blue/prismap-ai-core/omerkahveci/envs/la-cdm/bin/python
+```
 
 ### Step 0 — Sync code ✅
 ```bash
@@ -133,8 +145,8 @@ was 100% — see the Step 4 note.
 sbatch slurm/train_smoke.sbatch
 tail -3 logs/lacdm_train_smoke_<id>.err
 ls outputs/train_smoke/*/episodes/
-python scripts/summarize_episodes.py outputs/train_smoke/*/episodes/train_episodes.csv
-python scripts/summarize_episodes.py outputs/train_smoke/*/episodes/val_step_0002_episodes.csv
+$PY scripts/summarize_episodes.py outputs/train_smoke/*/episodes/train_episodes.csv
+$PY scripts/summarize_episodes.py outputs/train_smoke/*/episodes/val_step_0002_episodes.csv
 ```
 - [x] Finished with no traceback (`[SLURM] Finished` is in the `.out` log)
 - [x] `train_episodes.csv` and `val_step_0000/0001/0002_*` files exist
@@ -171,16 +183,16 @@ so it runs when a training job ends (~1 h, delays training by about that much).
 
 ### Step 4 — Early checks (first day)
 - [ ] After ~3 h (step-0 validation + ~25 steps):
-  `python scripts/summarize_episodes.py outputs/cost_sweep/cost_1/train/episodes/train_episodes.csv`
+  `$PY scripts/summarize_episodes.py outputs/cost_sweep/cost_1/train/episodes/train_episodes.csv`
   **Collapse warning:** the untrained model fails format on most episodes, so a high
   "Cost-only signal" in steps 1–25 is expected (the smoke test showed 100%). The
   collapse pattern is when it **stays** high and "Undiagnosed" stays near 100%
   through steps 25–100 instead of falling (how an earlier 1.5x run collapsed).
   If so, stop and investigate before
   spending 4 days.
-- [ ] After step 100: `python scripts/validation_curve.py outputs/cost_sweep/cost_1/train`;
+- [x] After step 100 (attempt 2: passed, 3.1% → 42.5%): `$PY scripts/validation_curve.py outputs/cost_sweep/cost_1/train`;
   accuracy should be clearly above step 0.
-- [ ] Zero-shot done (~1 h): `outputs/zero_shot/test/metrics.json` and `test_episodes.csv`.
+- [x] Zero-shot done (~1 h): `outputs/zero_shot/test/metrics.json` and `test_episodes.csv`.
 
 ### Step 5 — Optional: test an intermediate adapter while training continues
 Not required. If the validation curve flattens early (e.g. by step 600), testing that
@@ -192,6 +204,11 @@ sbatch --export=ALL,COST_MULTIPLIER=1,ADAPTER_STEP=600 slurm/evaluate_cost_sweep
 
 ### Step 6 — During the run (days 2–4)
 - Re-run `validation_curve.py` periodically.
+- Plot progress (needs matplotlib in the env, see Step 7):
+  ```bash
+  $PY scripts/plot_validation_curve.py --run attempt2=outputs/cost_sweep/cost_1/train       --run attempt1=outputs/cost_sweep/cost_1_attempt1_collapsed/train --out figures/validation
+  $PY scripts/plot_training_curve.py outputs/cost_sweep/cost_1/train --out figures/training
+  ```
 - `jobs.log` should show each job resuming where the last stopped. A job that times
   out loses at most 25 steps plus any validation pass in progress.
 - Two failures in a row (not time-outs): stop and read `train_output.log`.
@@ -200,11 +217,11 @@ sbatch --export=ALL,COST_MULTIPLIER=1,ADAPTER_STEP=600 slurm/evaluate_cost_sweep
 ```bash
 sbatch --export=ALL,COST_MULTIPLIER=1 slurm/evaluate_cost_sweep.sbatch                    # step 1920
 sbatch --export=ALL,COST_MULTIPLIER=1,ADAPTER_STEP=1800 slurm/evaluate_cost_sweep.sbatch  # last full cycle
-pip install --no-cache-dir matplotlib   # once, in the la-cdm env (or plot locally)
-python scripts/plot_validation_curve.py \
+$PY -m pip install --no-cache-dir matplotlib   # once, into the la-cdm env (or plot locally)
+$PY scripts/plot_validation_curve.py \
     --run baseline=outputs/cost_sweep/cost_1/train \
     --out figures/validation
-python scripts/summarize_episodes.py outputs/zero_shot/test/test_episodes.csv \
+$PY scripts/summarize_episodes.py outputs/zero_shot/test/test_episodes.csv \
     outputs/cost_sweep/cost_1/test_step_1800/test_episodes.csv \
     outputs/cost_sweep/cost_1/test_step_1920/test_episodes.csv
 ```
@@ -234,12 +251,13 @@ Earlier runs (`outputs/cost_sweep/cost_0/`, `cost_1p5/`, `train_full_*/`, `adapt
 
 | Item | Value |
 |---|---|
-| Commit | |
+| Commit | Attempt 2: `d293c8c` (clean) |
 | Smoke train job / result | `outputs/train_smoke/20261107-120356/` — passed (pipeline only; 0/4 diagnosed) |
 | Adapter smoke job / result | `outputs/adapter_smoke/20261107-121232/` — passed (pipeline only; 0/2 diagnosed) |
-| Zero-shot job / test accuracy | 50132298 (submitted Nov 7; waiting on `QOSGrpMemLimit` until a training job frees memory) / |
-| Training jobs (from `jobs.log`) | Chain submitted Nov 7: 50132293 (running on c0602a-s7), then 50132294 → 50132295 → 50132296 → 50132297 (each `afterany` the previous) |
-| Step-0 validation accuracy | |
+| Zero-shot job / test accuracy | Rerun after the attempt-2 fixes, finished Nov 8 (`outputs/zero_shot/test/`): **8.75% (21/240)**, 87.9% undiagnosed (all `invalid_format`), 72.4% diagnosed-only, macro F1 15.5%, 1.16 tests / $798 per case, HA accuracy 65.3%. CBC returned a result in 42.9% of cases. Fixed code confirmed: metrics dated Nov 8 06:39, after the pull; only 1 of 240 transcripts has an "Unknown test" error. |
+| Training jobs (from `jobs.log`) | Attempt 1 (cancelled): 50132293 → 50132297. Attempt 2: 50189200 started 2026-11-08 05:48 from step 0 (rest of the chain: fill in from `squeue`) |
+| Step-0 validation accuracy | Attempt 2: 3.1%, 95.9% undiagnosed, 0.99 tests/case (attempt 1: 2.4%, 96.9%) |
+| Validation curve (attempt 2) | Step 100: **42.5%** accuracy, 42.4% undiagnosed (32.5% `invalid_format`, 9.9% `max_length`), 73.8% diagnosed-only, macro F1 50.8%, 1.68 tests / $1,333, 3.4 turns. Per disease: appendicitis 52.1%, diverticulitis 47.1%, cholecystitis 41.5%, pancreatitis 24.5% (39/216 called cholecystitis). Attempt 1 at step 100: 1.1%. |
 | Best validation step (chosen for testing) | |
 | Step-1,800 validation / test accuracy | |
 | Step-1,920 validation / test accuracy | |
