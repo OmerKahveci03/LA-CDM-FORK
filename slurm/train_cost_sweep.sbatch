@@ -23,7 +23,7 @@
 # finished arm), EVAL_ON_START=0 (skip the step-0 validation of the untrained
 # model), START_FRESH=1 (refuses if checkpoints exist).
 # Validation over time: python scripts/validation_curve.py outputs/cost_sweep/cost_<m>/train
-# and scripts/plot_validation_curve.py for charts.
+# and scripts/plot_run.py for every chart.
 
 set -euo pipefail
 

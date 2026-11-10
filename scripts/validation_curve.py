@@ -78,7 +78,9 @@ def cell(key: str, value) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("train_dir", type=Path, help="Run's train/ directory or its episodes/ directory.")
+    parser.add_argument("train_dir", type=Path, nargs="?", default=Path("outputs/cost_sweep/cost_1/train"),
+                        help="Run's train/ directory or its episodes/ directory "
+                             "(default: outputs/cost_sweep/cost_1/train).")
     args = parser.parse_args()
     points = load_curve(args.train_dir)
     if not points:

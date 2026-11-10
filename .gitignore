@@ -255,3 +255,6 @@ Medgemma-27b-text-it-INT8/
 notebooks/
 .claude/
 uv.lock
+
+# Generated plots (scripts/plot_*.py)
+figures/

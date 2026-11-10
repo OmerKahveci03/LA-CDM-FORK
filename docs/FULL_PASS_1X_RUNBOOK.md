@@ -114,7 +114,7 @@ Consequences to remember when reporting:
 | Fixed arm directory, automatic resume, settings lock, job history, step-0 and final validation, adapters kept at every cycle end | `slurm/train_cost_sweep.sbatch`, `src/train.py`, `scripts/find_latest_training_checkpoint.py` |
 | Test evaluation by arm and step, never overwrites | `slurm/evaluate_cost_sweep.sbatch` |
 | Zero-shot baseline and smoke tests write to fixed or timestamped folders | `slurm/zero_shot_full.sbatch`, `slurm/train_smoke.sbatch`, `slurm/adapter_smoke.sbatch` |
-| Analysis scripts | `scripts/summarize_episodes.py` (tables), `scripts/validation_curve.py` (validation over steps), `scripts/plot_validation_curve.py` (PDF/PNG charts) |
+| Analysis scripts | `scripts/summarize_episodes.py` (tables), `scripts/validation_curve.py` (validation over steps), `scripts/plot_run.py` (every PDF/PNG chart) |
 | Tests (20, all passing locally) | `tests/test_episode_log.py`, `tests/test_environment_end_reasons.py`, `tests/test_find_latest_training_checkpoint.py` |
 
 Training behaviour is unchanged from the earlier code except one relabelling: an
@@ -206,9 +206,11 @@ sbatch --export=ALL,COST_MULTIPLIER=1,ADAPTER_STEP=600 slurm/evaluate_cost_sweep
 - Re-run `validation_curve.py` periodically.
 - Plot progress (needs matplotlib in the env, see Step 7):
   ```bash
-  $PY scripts/plot_validation_curve.py --run attempt2=outputs/cost_sweep/cost_1/train       --run attempt1=outputs/cost_sweep/cost_1_attempt1_collapsed/train --out figures/validation
-  $PY scripts/plot_training_curve.py outputs/cost_sweep/cost_1/train --out figures/training
+  $PY scripts/plot_run.py          # every figure for outputs/cost_sweep/cost_1/train
+  $PY scripts/plot_run.py --compare attempt1=outputs/cost_sweep/cost_1_attempt1_collapsed/train
   ```
+  Figures go to `figures/` (git-ignored), per-disease versions to `figures/per_disease/<disease>/`.
+  `--help` lists every figure and option.
 - `jobs.log` should show each job resuming where the last stopped. A job that times
   out loses at most 25 steps plus any validation pass in progress.
 - Two failures in a row (not time-outs): stop and read `train_output.log`.
@@ -218,9 +220,7 @@ sbatch --export=ALL,COST_MULTIPLIER=1,ADAPTER_STEP=600 slurm/evaluate_cost_sweep
 sbatch --export=ALL,COST_MULTIPLIER=1 slurm/evaluate_cost_sweep.sbatch                    # step 1920
 sbatch --export=ALL,COST_MULTIPLIER=1,ADAPTER_STEP=1800 slurm/evaluate_cost_sweep.sbatch  # last full cycle
 $PY -m pip install --no-cache-dir matplotlib   # once, into the la-cdm env (or plot locally)
-$PY scripts/plot_validation_curve.py \
-    --run baseline=outputs/cost_sweep/cost_1/train \
-    --out figures/validation
+$PY scripts/plot_run.py                        # every figure, into figures/
 $PY scripts/summarize_episodes.py outputs/zero_shot/test/test_episodes.csv \
     outputs/cost_sweep/cost_1/test_step_1800/test_episodes.csv \
     outputs/cost_sweep/cost_1/test_step_1920/test_episodes.csv
@@ -242,7 +242,7 @@ outputs/cost_sweep/cost_1/
   train/episodes/val_step_<N>_{episodes.csv,summary.json,transcripts.jsonl}
   train/episodes/val_curve.csv                   written by validation_curve.py
   test_step_1800/, test_step_1920/ (+ any optional intermediate step)
-figures/validation_{overview,per_disease}.{pdf,png}, validation_points.csv
+figures/ (scripts/plot_run.py): validation_*, confusion_*, training, per_disease/<disease>/
 ```
 Earlier runs (`outputs/cost_sweep/cost_0/`, `cost_1p5/`, `train_full_*/`, `adapter_full_*/`,
 `zero_shot_full_*/`) are left untouched and are **not part of this baseline**.
