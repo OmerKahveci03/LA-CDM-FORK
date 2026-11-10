@@ -59,7 +59,9 @@ trap 'rc=$?; log_job "train exit=$rc"' EXIT
 # charge_invalid=false: invalid episodes are not charged for tests (see
 # configs/reward_function/defaults.yaml); arms trained before this change used
 # the paper's reward and have no such field, so they cannot be resumed with it.
-SETTINGS="cost_multiplier=$COST_MULTIPLIER num_generations=4 batch_size=1 max_completion_length=128 max_length=2048 charge_invalid=false"
+# ha_sft=all_rows: HA-SFT padding fix (Nov 2026); runs trained before it scored only
+# the longest HA prompt per step and must not be resumed with the fixed code.
+SETTINGS="cost_multiplier=$COST_MULTIPLIER num_generations=4 batch_size=1 max_completion_length=128 max_length=2048 charge_invalid=false ha_sft=all_rows"
 if [[ -f "$RUN_ROOT/run_settings.txt" ]]; then
     if [[ "$(cat "$RUN_ROOT/run_settings.txt")" != "$SETTINGS" ]]; then
         echo "[SLURM] Settings differ from this arm's first job:" >&2

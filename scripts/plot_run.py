@@ -16,6 +16,14 @@ training                  per-step training rollouts (``train_episodes.csv``),
                           averaged over ``--window`` steps, incl. the GRPO signal
 confusion_over_time       per true disease, what the model predicted at each step
 confusion_matrices        full matrices at step 0, every cycle end, and the last step
+test_overview             test set, per checkpoint (zero-shot + every test_step_* beside
+                          the run): accuracy, mean per-disease accuracy, macro F1,
+                          undiagnosed, tests and cost (mean + median), 95% intervals,
+                          paper LA-CDM reference lines
+test_per_disease          test accuracy per disease, checkpoints side by side
+test_distributions        test-count shares and cost box plots per checkpoint
+test_confusion            one confusion matrix per checkpoint
+test_cost_vs_accuracy     each checkpoint as a point, cost against accuracy (+ paper)
 
 and the same per disease in ``per_disease/<disease>/`` (validation_details with
 recall, precision, F1 and the rest; validation_distributions; training), unless
@@ -51,7 +59,7 @@ from scripts.validation_curve import load_curve
 from src.utils.episode_log import DISEASES, group_signal_flags, read_rows
 
 DEFAULT_RUN = Path("outputs/cost_sweep/cost_1/train")
-FIGURES = ("validation", "distributions", "training", "confusion")
+FIGURES = ("validation", "distributions", "training", "confusion", "test")
 
 # Reference palette (light mode). Categorical hues are assigned to runs in order.
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
@@ -400,54 +408,69 @@ def step_axis(ax, title: str, steps: list[int]) -> None:
     ax.set_xticks([s for s in steps if s % every == 0])
 
 
+def draw_shares(ax, positions, groups, column, labels, to_index, width) -> list[list[float]]:
+    """Stacked shares of a small-integer column, one bar per group of rows."""
+    y_format(ax, "pct", 1)
+    shares = []
+    for rows in groups:
+        counts = [0] * len(labels)
+        for row in rows:
+            counts[to_index(row[column])] += 1
+        shares.append([c / len(rows) for c in counts])
+    bottoms = [0.0] * len(positions)
+    for index, label in enumerate(labels):
+        heights = [s[index] for s in shares]
+        # Surface-coloured edges give the gap between stacked segments.
+        ax.bar(positions, heights, width=width, bottom=bottoms, color=ORDINAL[index], label=label,
+               edgecolor=SURFACE, linewidth=1.0, zorder=3)
+        bottoms = [b + h for b, h in zip(bottoms, heights)]
+    ax.legend(loc="upper left", bbox_to_anchor=(1.0, 1.0), frameon=False, fontsize=8,
+              labelcolor=INK_2, handlelength=1.0, reverse=True)
+    return shares
+
+
+def draw_boxes(ax, positions, groups, column, width) -> list[dict]:
+    """Box plots (5th-95th whiskers, mean dot) of a column, one per group of rows."""
+    stats = []
+    for rows in groups:
+        values = sorted(float(r[column]) for r in rows)
+        stats.append({"p05": quantile(values, 0.05), "q1": quantile(values, 0.25),
+                      "median": quantile(values, 0.5), "q3": quantile(values, 0.75),
+                      "p95": quantile(values, 0.95), "mean": sum(values) / len(values)})
+    ax.bxp([{"med": s["median"], "q1": s["q1"], "q3": s["q3"], "whislo": s["p05"], "whishi": s["p95"],
+             "mean": s["mean"], "fliers": []} for s in stats],
+           positions=positions, widths=width, showmeans=True, showfliers=False, patch_artist=True,
+           boxprops={"facecolor": BOX_FILL, "edgecolor": BOX_LINE, "linewidth": 1.0},
+           medianprops={"color": BOX_LINE, "linewidth": 2.0},
+           whiskerprops={"color": MUTED, "linewidth": 1.0}, capprops={"color": MUTED, "linewidth": 1.0},
+           meanprops={"marker": "o", "markerfacecolor": INK, "markeredgecolor": SURFACE,
+                      "markeredgewidth": 1.0, "markersize": 4},
+           manage_ticks=False, zorder=3)
+    return stats
+
+
+BOX_NOTE = ("Boxes: middle 50%, line = median, whiskers = 5th-95th percentile, dot = mean. "
+            "Tests = distinct tests that returned a result (not unavailable or misnamed requests); cost is theirs.")
+
+
 def plot_distributions(train_dir: Path, out_dir: Path, disease: str | None, token_limit: int) -> list[str]:
     data = load_validation_episodes(train_dir, disease)
     if not data:
         print(f"  skipped validation_distributions: no val_step_*_episodes.csv under {train_dir}")
         return []
     steps = sorted(data)
+    groups = [data[s] for s in steps]
     width = min((b - a for a, b in zip(steps, steps[1:])), default=100) * 0.7
     fig, axes = new_figure(2, 2, 6, 3.5)
     points = []
-
     for ax, (column, title, labels, to_index) in zip(axes[0], SHARE_PANELS):
         step_axis(ax, title, steps)
-        y_format(ax, "pct", 1)
-        shares = []
-        for step in steps:
-            counts = [0] * len(labels)
-            for row in data[step]:
-                counts[to_index(row[column])] += 1
-            shares.append([c / len(data[step]) for c in counts])
-        bottoms = [0.0] * len(steps)
-        for index, label in enumerate(labels):
-            heights = [s[index] for s in shares]
-            # Surface-coloured edges give the gap between stacked segments.
-            ax.bar(steps, heights, width=width, bottom=bottoms, color=ORDINAL[index], label=label,
-                   edgecolor=SURFACE, linewidth=1.0, zorder=3)
-            bottoms = [b + h for b, h in zip(bottoms, heights)]
-        ax.legend(loc="upper left", bbox_to_anchor=(1.0, 1.0), frameon=False, fontsize=8,
-                  labelcolor=INK_2, handlelength=1.0, reverse=True)
+        shares = draw_shares(ax, steps, groups, column, labels, to_index, width)
         points += [{"panel": column, "step": s, **{f"share_{l}": round(v, 4) for l, v in zip(labels, share)}}
                    for s, share in zip(steps, shares)]
-
     for ax, (column, title, kind) in zip(axes[1], BOX_PANELS):
         step_axis(ax, title, steps)
-        stats = []
-        for step in steps:
-            values = sorted(float(r[column]) for r in data[step])
-            stats.append({"p05": quantile(values, 0.05), "q1": quantile(values, 0.25),
-                          "median": quantile(values, 0.5), "q3": quantile(values, 0.75),
-                          "p95": quantile(values, 0.95), "mean": sum(values) / len(values)})
-        ax.bxp([{"med": s["median"], "q1": s["q1"], "q3": s["q3"], "whislo": s["p05"], "whishi": s["p95"],
-                 "mean": s["mean"], "fliers": []} for s in stats],
-               positions=steps, widths=width, showmeans=True, showfliers=False, patch_artist=True,
-               boxprops={"facecolor": BOX_FILL, "edgecolor": BOX_LINE, "linewidth": 1.0},
-               medianprops={"color": BOX_LINE, "linewidth": 2.0},
-               whiskerprops={"color": MUTED, "linewidth": 1.0}, capprops={"color": MUTED, "linewidth": 1.0},
-               meanprops={"marker": "o", "markerfacecolor": INK, "markeredgecolor": SURFACE,
-                          "markeredgewidth": 1.0, "markersize": 4},
-               manage_ticks=False, zorder=3)
+        stats = draw_boxes(ax, steps, groups, column, width)
         top = max(s["p95"] for s in stats)
         if column == "transcript_tokens" and token_limit:
             ax.axhline(token_limit, color=MUTED, linewidth=1.0, linestyle=(0, (4, 3)), zorder=2)
@@ -460,9 +483,7 @@ def plot_distributions(train_dir: Path, out_dir: Path, disease: str | None, toke
 
     who = f"{disease} episodes" if disease else "all episodes"
     name = "validation_distributions"
-    save(fig, out_dir / name,
-         note="Boxes: middle 50%, line = median, whiskers = 5th-95th percentile, dot = mean. "
-              "Tests = distinct tests that returned a result (not unavailable or misnamed requests); cost is theirs.",
+    save(fig, out_dir / name, note=BOX_NOTE,
          title=f"Validation distributions ({who}, {len(data[steps[0]])} per step)")
     write_points(out_dir / f"{name}_points.csv", points)
     return [name]
@@ -559,15 +580,39 @@ def plot_training(rows: list[dict], out_dir: Path, window: int, disease: str | N
 
 # ----------------------------------------------------------- confusion over time
 
+PREDICTED = list(DISEASES) + ["undiagnosed"]
+MATRIX_NOTE = ("Rows: true disease. Columns: prediction (appen. cholec. divert. pancr., none = undiagnosed). "
+               "Rows sum to 100.")
+
+
+def draw_matrix(ax, matrix: list[list[float]], title: str) -> None:
+    """Row-normalized confusion heatmap with the percentage written in each cell."""
+    from matplotlib.colors import LinearSegmentedColormap, to_rgb
+
+    cmap = LinearSegmentedColormap.from_list("seq", SEQUENTIAL)
+    ax.imshow(matrix, cmap=cmap, vmin=0, vmax=1, aspect="auto")
+    ax.set_title(title, loc="left", fontsize=10, color=INK, pad=8)
+    ax.set_xticks(range(len(PREDICTED)), [p[:5] + "." if p != "undiagnosed" else "none" for p in PREDICTED],
+                  fontsize=7, color=INK_2)
+    ax.set_yticks(range(len(DISEASES)), [d[:5] + "." for d in DISEASES], fontsize=7, color=INK_2)
+    ax.tick_params(length=0)
+    for side in ax.spines.values():
+        side.set_visible(False)
+    for i, line in enumerate(matrix):
+        for j, value in enumerate(line):
+            r, g, b = to_rgb(cmap(value))
+            light = 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5  # label ink by cell luminance
+            ax.text(j, i, f"{100 * value:.0f}", ha="center", va="center", fontsize=7,
+                    color="#0b0b0b" if light else "#ffffff")
+
 def plot_confusion(summaries: list[dict], out_dir: Path) -> list[str]:
     summaries = [s for s in summaries if s.get("confusion")]
     if not summaries:
         print("  skipped confusion: no confusion matrices in the summaries")
         return []
-    from matplotlib.colors import LinearSegmentedColormap, to_rgb
     from matplotlib.patches import Patch
 
-    predicted = list(DISEASES) + ["undiagnosed"]
+    predicted = PREDICTED
     colors = [DISEASE_COLORS[d] for d in DISEASES] + [UNDIAGNOSED_COLOR]
     steps = [s["step"] for s in summaries]
     shares = {}  # (step, true, predicted) -> share of that true disease's episodes
@@ -607,32 +652,279 @@ def plot_confusion(summaries: list[dict], out_dir: Path) -> list[str]:
     columns = min(4, len(chosen))
     rows = (len(chosen) + columns - 1) // columns
     fig, axes = new_figure(rows, columns, 3.4, 3.2)
-    cmap = LinearSegmentedColormap.from_list("seq", SEQUENTIAL)
-    image = None
     for ax, step in zip(axes.flat, chosen):
-        matrix = [[shares[(step, t, p)] for p in predicted] for t in DISEASES]
-        image = ax.imshow(matrix, cmap=cmap, vmin=0, vmax=1, aspect="auto")
-        ax.set_title(f"Step {step}", loc="left", fontsize=10, color=INK, pad=8)
-        ax.set_xticks(range(len(predicted)), [p[:5] + "." if p != "undiagnosed" else "none" for p in predicted],
-                      fontsize=7, color=INK_2)
-        ax.set_yticks(range(len(DISEASES)), [d[:5] + "." for d in DISEASES], fontsize=7, color=INK_2)
-        ax.tick_params(length=0)
-        for side in ax.spines.values():
-            side.set_visible(False)
-        for i, line in enumerate(matrix):
-            for j, value in enumerate(line):
-                r, g, b = to_rgb(cmap(value))
-                light = 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.5
-                ax.text(j, i, f"{100 * value:.0f}", ha="center", va="center", fontsize=7,
-                        color="#0b0b0b" if light else "#ffffff")
+        draw_matrix(ax, [[shares[(step, t, p)] for p in predicted] for t in DISEASES], f"Step {step}")
     for ax in list(axes.flat)[len(chosen):]:
         ax.set_visible(False)
     for ax in axes[:, 0]:
         ax.set_ylabel("True disease", fontsize=8, color=INK_2)
     save(fig, out_dir / "confusion_matrices", title="Confusion matrices (% of each true disease's episodes)",
-         note="Rows: true disease. Columns: prediction (appen. cholec. divert. pancr., none = undiagnosed). "
-              "Rows sum to 100.")
+         note=MATRIX_NOTE)
     return ["confusion_over_time", "confusion_matrices"]
+
+
+# ------------------------------------------------------------------------ test set
+
+# LA-CDM as reported in arXiv 2506.13474 (with the test-cost reward): Table 1 average
+# test cost per patient, Table 2 mean (class-wise) accuracy and macro F1.
+PAPER = {"cost": 1295.61, "class_mean_accuracy": 0.813, "macro_f1": 0.813}
+ZERO_SHOT_COLOR = MUTED  # the untrained reference is neutral; checkpoints take categorical hues
+
+
+def load_test_runs(train_dir: Path, zero_shot_dir: Path | None) -> list[tuple[str, list[dict]]]:
+    """(name, rows) for zero-shot and every test_step_* evaluation of the run, in step order."""
+    runs = []
+    if zero_shot_dir and (zero_shot_dir / "test_episodes.csv").is_file():
+        runs.append(("zero-shot", read_rows(zero_shot_dir / "test_episodes.csv")))
+    for folder in sorted(train_dir.parent.glob("test_step_*")):
+        if (folder / "test_episodes.csv").is_file():
+            step = int(re.search(r"test_step_(\d+)", folder.name).group(1))
+            runs.append((f"step {step}", read_rows(folder / "test_episodes.csv")))
+    return [(name, rows) for name, rows in runs if rows]
+
+
+def wilson(k: int, n: int, z: float = 1.96) -> tuple[float | None, float | None]:
+    """95% Wilson score interval for a proportion k/n."""
+    if n == 0:
+        return None, None
+    p = k / n
+    denominator = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denominator
+    half = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / denominator
+    return max(0.0, centre - half), min(1.0, centre + half)
+
+
+def macro_f1(rows: list[dict]) -> float:
+    """Mean F1 over the 4 diseases; a disease never predicted has F1 0 (as in episode_log)."""
+    scores = []
+    for disease in DISEASES:
+        true = sum(r["label"] == disease for r in rows)
+        if not true:
+            continue
+        predicted = sum(r["diagnosis"] == disease for r in rows)
+        hits = sum(r["label"] == disease and r["diagnosis"] == disease for r in rows)
+        precision, recall = (hits / predicted if predicted else 0.0), hits / true
+        scores.append(2 * precision * recall / (precision + recall) if precision + recall else 0.0)
+    return sum(scores) / len(scores) if scores else 0.0
+
+
+def class_mean_accuracy(rows: list[dict]) -> float:
+    """Mean of per-disease accuracy (recall): the paper's "mean accuracy"."""
+    recalls = []
+    for disease in DISEASES:
+        group = [r for r in rows if r["label"] == disease]
+        if group:
+            recalls.append(sum(r["correct"] for r in group) / len(group))
+    return sum(recalls) / len(recalls) if recalls else 0.0
+
+
+BOOTSTRAPPED = {
+    "macro_f1": macro_f1,
+    "class_mean_accuracy": class_mean_accuracy,
+    "tests": lambda rows: sum(r["num_tests"] for r in rows) / len(rows),
+    "cost": lambda rows: sum(r["cost_usd"] for r in rows) / len(rows),
+}
+
+
+def test_metrics(rows: list[dict], resamples: int, seed: int = 0) -> dict:
+    """Point estimates with 95% intervals: Wilson for shares, case bootstrap otherwise."""
+    import random
+
+    n = len(rows)
+    out = {}
+    for key, k in (("accuracy", sum(r["correct"] for r in rows)),
+                   ("undiagnosed", sum(not r["diagnosis"] for r in rows))):
+        out[key] = (k / n, *wilson(k, n))
+    rng = random.Random(seed)
+    samples = {key: [] for key in BOOTSTRAPPED}
+    for _ in range(resamples):
+        sample = [rows[rng.randrange(n)] for _ in range(n)]
+        for key, fn in BOOTSTRAPPED.items():
+            samples[key].append(fn(sample))
+    for key, fn in BOOTSTRAPPED.items():
+        values = sorted(samples[key])
+        out[key] = (fn(rows), quantile(values, 0.025), quantile(values, 0.975)) if values else (fn(rows), None, None)
+    out["tests_median"] = median([r["num_tests"] for r in rows])
+    out["cost_median"] = median([r["cost_usd"] for r in rows])
+    for disease in DISEASES:
+        group = [r for r in rows if r["label"] == disease]
+        k = sum(r["correct"] for r in group)
+        out[f"accuracy_{disease}"] = (k / len(group) if group else None, *wilson(k, len(group)))
+    return out
+
+
+def category_axis(ax, title: str, names: list[str]) -> None:
+    base_style(ax, title)
+    ax.set_xlabel("")
+    ax.set_xticks(range(len(names)), names, fontsize=8, color=INK_2)
+    ax.set_xlim(-0.6, len(names) - 0.4)
+
+
+def value_text(kind: str, value: float) -> str:
+    if kind == "money":
+        return f"${value:,.0f}"
+    if kind == "number":
+        return f"{value:.2f}"
+    return f"{100 * value:.1f}%"
+
+
+def draw_ci_bars(ax, names, estimates, colors, kind, medians=None, reference=None) -> None:
+    """One bar per checkpoint with its 95% interval, value at the tip, optional median dots
+    and a dashed reference line (label, value)."""
+    from matplotlib.lines import Line2D
+
+    xs = range(len(names))
+    values = [e[0] for e in estimates]
+    lows = [e[0] - e[1] if e[1] is not None else 0 for e in estimates]
+    highs = [e[2] - e[0] if e[2] is not None else 0 for e in estimates]
+    ax.bar(xs, values, width=0.62, color=colors, edgecolor=SURFACE, linewidth=1.0, zorder=3)
+    ax.errorbar(xs, values, yerr=[lows, highs], fmt="none", ecolor=INK_2, elinewidth=1.0, capsize=3, zorder=4)
+    tops = [e[2] if e[2] is not None else e[0] for e in estimates]
+    for x, top, value in zip(xs, tops, values):
+        ax.text(x, top, value_text(kind, value), ha="center", va="bottom", fontsize=7, color=INK_2,
+                transform=ax.transData, zorder=5,
+                bbox={"facecolor": SURFACE, "edgecolor": "none", "pad": 0.8})
+    handles = []
+    top = max(tops)
+    if medians is not None:
+        ax.scatter(xs, medians, s=22, color=MEDIAN_COLOR, edgecolors=SURFACE, linewidths=1.0, zorder=5)
+        handles.append(Line2D([], [], marker="o", linestyle="", color=MEDIAN_COLOR, label="median"))
+        top = max([top] + [m for m in medians if m is not None])
+    if reference is not None:
+        label, value = reference
+        ax.axhline(value, color=INK_2, linewidth=1.0, linestyle=(0, (4, 3)), zorder=2)
+        handles.append(Line2D([], [], color=INK_2, linewidth=1.0, linestyle=(0, (4, 3)), label=label))
+        top = max(top, value)
+    if kind == "pct":
+        y_format(ax, "pct", 1)
+        ax.set_ylim(0, 1.08)
+    else:
+        y_format(ax, kind, top * 1.05)
+    if handles:
+        ax.legend(handles=handles, loc="upper right", frameon=False, fontsize=7, labelcolor=INK_2)
+
+
+def plot_test(train_dir: Path, zero_shot_dir: Path | None, out_dir: Path, resamples: int) -> list[str]:
+    runs = load_test_runs(train_dir, zero_shot_dir)
+    if not runs:
+        print(f"  skipped test: no test_step_*/test_episodes.csv beside {train_dir} (and no zero-shot)")
+        return []
+    names = [name for name, _ in runs]
+    trained = [name for name in names if name != "zero-shot"]
+    palette = dict(zip(trained, SERIES))
+    palette["zero-shot"] = ZERO_SHOT_COLOR
+    colors = [palette[name] for name in names]
+    metrics = {name: test_metrics(rows, resamples) for name, rows in runs}
+    n_cases = len(runs[0][1])
+    points = [{"checkpoint": name, "metric": key, "value": value[0] if isinstance(value, tuple) else value,
+               "ci_low": value[1] if isinstance(value, tuple) else None,
+               "ci_high": value[2] if isinstance(value, tuple) else None}
+              for name, m in metrics.items() for key, value in m.items()]
+    write_points(out_dir / "test_points.csv", points)
+
+    # 1. Headline metrics per checkpoint.
+    panels = [
+        ("accuracy", "Accuracy (undiagnosed counted wrong)", "pct", None),
+        ("class_mean_accuracy", "Mean per-disease accuracy", "pct", ("paper LA-CDM", PAPER["class_mean_accuracy"])),
+        ("macro_f1", "Macro F1", "pct", ("paper LA-CDM", PAPER["macro_f1"])),
+        ("undiagnosed", "Undiagnosed share", "pct", None),
+        ("tests", "Average tests per case", "number", None),
+        ("cost", "Average test cost per case (USD)", "money", ("paper LA-CDM", PAPER["cost"])),
+    ]
+    fig, axes = new_figure(2, 3, 4.0, 3.1)
+    for ax, (key, title, kind, reference) in zip(axes.flat, panels):
+        category_axis(ax, title, names)
+        medians = [metrics[n][f"{key}_median"] for n in names] if key in ("tests", "cost") else None
+        draw_ci_bars(ax, names, [metrics[n][key] for n in names], colors, kind, medians, reference)
+    save(fig, out_dir / "test_overview", title=f"Test set ({n_cases} cases, 1 rollout each)",
+         note="Error bars: 95% intervals (Wilson for accuracy and undiagnosed; case bootstrap otherwise). "
+              "Tests = distinct tests that returned a result.")
+
+    # 2. Accuracy per disease, checkpoints side by side.
+    from matplotlib.patches import Patch
+
+    fig, axes = new_figure(1, 1, 10, 3.6)
+    ax = axes[0][0]
+    base_style(ax, "Accuracy per true disease (recall; undiagnosed counted wrong)")
+    ax.set_xlabel("")
+    width = 0.8 / len(names)
+    for i, name in enumerate(names):
+        xs = [d + (i - (len(names) - 1) / 2) * width for d in range(len(DISEASES))]
+        estimates = [metrics[name][f"accuracy_{d}"] for d in DISEASES]
+        values = [e[0] or 0 for e in estimates]
+        ax.bar(xs, values, width=width, color=palette[name], edgecolor=SURFACE, linewidth=1.0, zorder=3)
+        ax.errorbar(xs, values, yerr=[[v - (e[1] or v) for v, e in zip(values, estimates)],
+                                      [(e[2] or v) - v for v, e in zip(values, estimates)]],
+                    fmt="none", ecolor=INK_2, elinewidth=0.8, capsize=2, zorder=4)
+    counts = {d: sum(r["label"] == d for r in runs[0][1]) for d in DISEASES}
+    ax.set_xticks(range(len(DISEASES)), [f"{d}\n(n = {counts[d]})" for d in DISEASES], fontsize=8, color=INK_2)
+    y_format(ax, "pct", 1)
+    ax.legend(handles=[Patch(color=palette[n], label=n) for n in names], loc="upper left",
+              bbox_to_anchor=(1.0, 1.0), frameon=False, fontsize=8, labelcolor=INK_2)
+    save(fig, out_dir / "test_per_disease", note="Error bars: 95% Wilson intervals. Small groups "
+         "(e.g. diverticulitis) have wide intervals.")
+
+    # 3. Distributions per checkpoint.
+    groups = [rows for _, rows in runs]
+    fig, axes = new_figure(1, 2, 6, 3.5)
+    category_axis(axes[0][0], "Tests per case (share of cases)", names)
+    column, _, labels, to_index = SHARE_PANELS[0]
+    shares = draw_shares(axes[0][0], list(range(len(names))), groups, column, labels, to_index, 0.6)
+    category_axis(axes[0][1], "Test cost per case (USD), spread", names)
+    stats = draw_boxes(axes[0][1], list(range(len(names))), groups, "cost_usd", 0.6)
+    y_format(axes[0][1], "money", max(max(s["p95"] for s in stats), 1) / 1.15 * 1.12)
+    save(fig, out_dir / "test_distributions", note=BOX_NOTE, title="Test set: tests and cost per case")
+    write_points(out_dir / "test_distributions_points.csv",
+                 [{"checkpoint": n, **{f"share_tests_{l}": round(v, 4) for l, v in zip(labels, sh)},
+                   **{f"cost_{k}": round(v, 2) for k, v in st.items()}}
+                  for n, sh, st in zip(names, shares, stats)])
+
+    # 4. Confusion matrix per checkpoint.
+    columns = min(len(runs), 5)
+    fig, axes = new_figure((len(runs) + columns - 1) // columns, columns, 3.2, 3.2)
+    for ax, (name, rows) in zip(axes.flat, runs):
+        matrix = []
+        for true in DISEASES:
+            group = [r for r in rows if r["label"] == true]
+            matrix.append([sum((r["diagnosis"] or "undiagnosed") == pred for r in group) / len(group) if group else 0
+                           for pred in PREDICTED])
+        draw_matrix(ax, matrix, name)
+    for ax in list(axes.flat)[len(runs):]:
+        ax.set_visible(False)
+    for ax in axes[:, 0]:
+        ax.set_ylabel("True disease", fontsize=8, color=INK_2)
+    save(fig, out_dir / "test_confusion", title="Test-set confusion matrices (% of each true disease's cases)",
+         note=MATRIX_NOTE)
+
+    # 5. Cost against accuracy, one point per checkpoint (paper on the class-mean panel).
+    from matplotlib.ticker import FuncFormatter
+
+    fig, axes = new_figure(1, 2, 5, 3.8)
+    max_cost = max([metrics[n]["cost"][2] or metrics[n]["cost"][0] for n in names] + [PAPER["cost"]])
+    for ax, (key, title) in zip(axes.flat, (("accuracy", "Accuracy vs cost"),
+                                            ("class_mean_accuracy", "Mean per-disease accuracy vs cost"))):
+        base_style(ax, title)
+        ax.set_xlabel("Average test cost per case (USD)", fontsize=8, color=INK_2)
+        ax.grid(axis="x", color=GRID, linewidth=0.8)
+        # Checkpoints cluster near zero cost, so identity comes from the legend, not labels.
+        for name in names:
+            cost, acc = metrics[name]["cost"], metrics[name][key]
+            ax.errorbar(cost[0], acc[0], xerr=[[cost[0] - (cost[1] or cost[0])], [(cost[2] or cost[0]) - cost[0]]],
+                        yerr=[[acc[0] - (acc[1] or acc[0])], [(acc[2] or acc[0]) - acc[0]]],
+                        fmt="o", color=palette[name], ecolor=palette[name], elinewidth=1.0, capsize=2,
+                        markersize=7, markeredgecolor=SURFACE, markeredgewidth=1.5, zorder=4, label=name)
+        if key == "class_mean_accuracy":
+            ax.scatter([PAPER["cost"]], [PAPER["class_mean_accuracy"]], marker="*", s=140, color=INK,
+                       edgecolors=SURFACE, linewidths=1.0, zorder=5)
+            ax.annotate("paper LA-CDM", (PAPER["cost"], PAPER["class_mean_accuracy"]), xytext=(7, -12),
+                        textcoords="offset points", fontsize=8, color=INK_2)
+        y_format(ax, "pct", 1)
+        ax.set_xlim(0, max_cost * 1.12)
+        ax.legend(loc="lower right", frameon=False, fontsize=8, labelcolor=INK_2, handletextpad=0.3)
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"${v:,.0f}"))
+    save(fig, out_dir / "test_cost_vs_accuracy", title="Test set: what each checkpoint pays for its accuracy",
+         note="Bars: 95% intervals. Up and to the left is better. The paper's point uses its own test split.")
+    return ["test_overview", "test_per_disease", "test_distributions", "test_confusion", "test_cost_vs_accuracy"]
 
 
 # ---------------------------------------------------------------------------- main
@@ -649,6 +941,9 @@ def main() -> None:
     parser.add_argument("--window", type=int, default=25, help="Training steps per plotted point (default 25).")
     parser.add_argument("--no-per-disease", action="store_true", help="Skip the per_disease/<disease>/ figures.")
     parser.add_argument("--token-limit", type=int, default=2048, help="Line on the transcript panel (0 hides it).")
+    parser.add_argument("--zero-shot", type=Path, default=Path("outputs/zero_shot/test"),
+                        help="Zero-shot test folder for the test figures (default: outputs/zero_shot/test).")
+    parser.add_argument("--bootstrap", type=int, default=2000, help="Resamples for test-set intervals.")
     parser.add_argument("--log-eval-steps", type=int, default=100)
     parser.add_argument("--no-shared-step0", action="store_true")
     args = parser.parse_args()
@@ -693,6 +988,8 @@ def main() -> None:
     summaries = load_summaries(args.train_dir) if args.train_dir.is_dir() else []
     if "confusion" in selected:
         written += plot_confusion(summaries, args.out_dir)
+    if "test" in selected:
+        written += plot_test(args.train_dir, args.zero_shot, args.out_dir, args.bootstrap)
     if written:
         print(f"Wrote to {args.out_dir}/: {', '.join(written)}")
 

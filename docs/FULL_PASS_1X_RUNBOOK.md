@@ -1,8 +1,8 @@
 # Full-pass 1x baseline: runbook and record
 
-Started: November 7, 2026. **Current position: attempt 2 running (job 50189200, started Nov 8); step-100 go/no-go
-passed (42.5% val accuracy). Now Step 6 (during the run), ~step 1,600 on Nov 9. Findings so far:
-section 6a (drift to zero tests, HA calibration degrading). Attempt 1 collapsed (section 0).**
+Started: November 7, 2026. **Current position: attempt 2 finished all 1,920 steps (Nov 10). Step 7: test jobs for steps
+1,920 and 1,800 submitted; step 600 chosen from validation for testing. Findings: section 6a.
+Attempt 1 collapsed (section 0).**
 
 ## 0. Attempt 1 collapsed — what happened and what changed
 
@@ -68,6 +68,22 @@ done
 This file is the single place to resume this experiment after time away. Tick the
 checkboxes and fill in the record table as steps complete. Results go into
 `docs/results/` and the weekly reports once they exist.
+
+### Step 3b — Attempt 3 (HA-SFT padding fix only)
+Only after all attempt-2 test jobs have finished (they write into `cost_1/test_step_*`):
+```bash
+squeue -u omerkahveci                      # no lacdm-cost-eval jobs left
+git pull && git log --oneline -1 && git status
+mv outputs/cost_sweep/cost_1 outputs/cost_sweep/cost_1_attempt2
+mv figures figures_attempt2                # keep attempt-2 plots
+$PY -m unittest tests.test_ha_sft_loss tests.test_test_cost_reward_multiplier
+jid=$(sbatch --parsable --export=ALL,COST_MULTIPLIER=1,MAX_STEPS=1920 slurm/train_cost_sweep.sbatch)
+for i in 1 2 3 4; do jid=$(sbatch --parsable --dependency=afterany:$jid --export=ALL,COST_MULTIPLIER=1,MAX_STEPS=1920 slurm/train_cost_sweep.sbatch); done
+cat outputs/cost_sweep/cost_1/jobs.log     # "start from step 0 to step 1920"
+```
+Everything else is unchanged, so differences from attempt 2 are due to the fix. Compare
+at matched steps: `$PY scripts/plot_run.py --compare attempt2=outputs/cost_sweep/cost_1_attempt2/train`.
+The zero-shot baseline does not need rerunning (SFT is training-only).
 
 ## 1. Goal and decisions
 
@@ -259,9 +275,9 @@ Earlier runs (`outputs/cost_sweep/cost_0/`, `cost_1p5/`, `train_full_*/`, `adapt
 | Training jobs (from `jobs.log`) | Attempt 1 (cancelled): 50132293 → 50132297. Attempt 2: 50189200 started 2026-11-08 05:48 from step 0 (rest of the chain: fill in from `squeue`) |
 | Step-0 validation accuracy | Attempt 2: 3.1%, 95.9% undiagnosed, 0.99 tests/case (attempt 1: 2.4%, 96.9%) |
 | Validation curve (attempt 2) | Step 100: **42.5%** accuracy, 42.4% undiagnosed (32.5% `invalid_format`, 9.9% `max_length`), 73.8% diagnosed-only, macro F1 50.8%, 1.68 tests / $1,333, 3.4 turns. Per disease: appendicitis 52.1%, diverticulitis 47.1%, cholecystitis 41.5%, pancreatitis 24.5% (39/216 called cholecystitis). Attempt 1 at step 100: 1.1%. |
-| Best validation step (chosen for testing) | |
-| Step-1,800 validation / test accuracy | |
-| Step-1,920 validation / test accuracy | |
+| Best validation step (chosen for testing) | **600** (chosen Nov 10 from validation, before any test result): 72.3% accuracy, 73.8% macro F1, 11.6% undiagnosed, 1.18 tests / $1,178, ECE 13.9; per disease 81.1 / 73.8 / 71.2 / 55.6% (app / chol / div / panc). Step 500 was similar but has no saved adapter. Optional calibration-best: 300 (67.5%, ECE 7.3). Test job: (fill in) / |
+| Step-1,800 validation / test accuracy | 66.5% val (macro F1 61.6%, 0.04 tests / $48, ECE 30.4) / test job 50655232 (check it used step_1800) |
+| Step-1,920 validation / test accuracy | 67.2% val (macro F1 61.7%, 2.5% undiagnosed, 0.06 tests / $71, ECE 28.2; per disease 84.5 / 68.1 / 38.5 / 49.5%) / test job 50655155 |
 | Warnings, failures, restarts | Attempt 1 (50132293–97) collapsed: 97% undiagnosed at step 0, 100% by step 400; moved to `outputs/cost_sweep/cost_1_attempt1_collapsed/`. Restarted with the section-0 fixes. |
 
 ## 6. Facts to carry into the report
@@ -341,14 +357,43 @@ adapter serves both agents, so DA and HA-SFT updates move the confidence outputs
 each 100-step calibration phase (1 sampled hypothesis x 4 confidences per step) is too
 weak to hold calibration. To check: `rewards/ha_conf_cal` per step in `train_output.log`.
 
-**4. Tests help the HA.** After-test HA calls are right 67–84% of the time versus 54–68%
+**4. Bug found Nov 10: HA-SFT trains on only one prompt per step.** Commit `4d44b01`
+(Sept 29, "steps optimization") made `_compute_loss_ha` score only the last
+`logits_to_keep` positions of each row, assuming the answer is the suffix. The HA-SFT
+rows are right-padded (TRL 0.15.2 `pad` default), so for every row shorter than the
+longest the window covers padding: that row contributes zero loss while still counting in
+the weights. Each HA-SFT step therefore trains on the single longest prompt at about 1/B
+of the intended strength (B = distinct HA prompts in the step). The paper's original code
+(full forward with `labels=`) handled padding correctly. Affects every full run since
+September (October 1x, 0x, 1.5x, attempt 2); not evaluation, DA GRPO or calibration.
+Consistent with HA accuracy barely moving in training (67% zero-shot → 65–73%).
+**Fixed Nov 10:** `src/trainer/ha_sft_loss.py` trims each row to its real length before
+scoring the suffix; `tests/test_ha_sft_loss.py` checks it equals the paper's computation
+on a tiny Llama (3.6952 vs 3.6952; the old code gave 2.1602 on the same batch). The
+sbatch settings lock now includes `ha_sft=all_rows`, so attempt-2 checkpoints cannot be
+resumed with the fixed code. Attempt 3 = attempt 2 + this fix only (Step 3b).
+
+**5. Microbatch 2 → 1 rescales the DA loss.** The Dr.GRPO loss divides by
+`per_token_loss.size(0) * max_length`, where `size(0)` is the microbatch size, and
+microbatch losses are summed; per-rollout weight goes from 1/(4·L) (paper: microbatch 2)
+to 1/L (ours). Adam largely cancels a constant scale and the KL term scales identically,
+so the effect should be small; record it as a deviation.
+
+**6. Tests help the HA.** After-test HA calls are right 67–84% of the time versus 54–68%
 for history-only calls, so the DA's drift to zero tests discards useful information.
 
-**Checkpoint plan (pending final validation):** steps 300 or 600 look best behaved
+**Final validation (step 1,920, Nov 10):** from step 600 to 1,920, cost fell 94% ($1,178 → $71)
+while accuracy fell 5 points (72.3% → 67.2%). The loss is concentrated in diseases that need
+tests: diverticulitis 71.2% → 38.5%, pancreatitis 55.6% → 49.5%, while appendicitis rose
+81.1% → 84.5%. Without tests the DA leans toward the history-recognisable common disease.
+ECE peaked at 30.4 (step 1,800).
+
+**Checkpoint plan (before final validation; final choice in the run record):** steps 300 or 600 look best behaved
 (accuracy at its plateau, tests still used, calibration gap ≤ +0.05 at step 300); test
 1,800 and 1,920 as well to document the no-test drift.
 
-**Fix ideas to try next (not started):** for the test drift, a smaller cost multiplier,
+**Fix ideas to try next (not started):** first, fix the HA-SFT padding bug (finding 4),
+since it changes what every later run learns; for the test drift, a smaller cost multiplier,
 stopping at the validation-chosen step, or a stronger KL penalty; for calibration,
 shorter phase cycles or joint (every-step) calibration, separate adapters per agent, or
 more calibration samples per step. Compare each against attempt 2 at matched steps.

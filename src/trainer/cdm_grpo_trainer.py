@@ -55,6 +55,7 @@ from src.utils import episode_log
 from pathlib import Path
 import json
 from src.trainer.loss_scheduler import LossScheduler
+from src.trainer.ha_sft_loss import ha_sft_loss
 from src.environment.environment import EnvironmentOutput
 
 from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
@@ -931,39 +932,17 @@ class CDMGRPOTrainer(GRPOTrainer):
 
         return loss
         
-    def _compute_loss_ha(self, model, inputs, last_minibatch, chunk_size=1):
-        ha_prompt_label_ids = inputs["ha_prompt_label_ids"]
-        ha_label_mask = inputs["ha_label_mask"]
-        ha_attention_mask = inputs["ha_attention_mask"]
-
+    def _compute_loss_ha(self, model, inputs, last_minibatch):
+        # Confidence "0" is a placeholder, not an SFT target. Rows are scored one at a
+        # time after trimming their right padding (see src/trainer/ha_sft_loss.py).
         placeholder_id = self.processing_class.encode("0", add_special_tokens=False)[0]
-        total_label_tokens = (ha_label_mask.bool() & (ha_prompt_label_ids != placeholder_id)).sum().clamp(min=1)
-        accumulated_loss = torch.tensor(0.0, device=ha_prompt_label_ids.device)
-
-        B = ha_prompt_label_ids.size(0)
-        for i in range(0, B, chunk_size):
-            ha_prompt_label_ids_chunk = ha_prompt_label_ids[i : i + chunk_size]
-            ha_label_mask_chunk = ha_label_mask[i : i + chunk_size]
-            ha_attention_mask_chunk = ha_attention_mask[i : i + chunk_size]
-
-            score_mask = ha_label_mask_chunk.bool()
-            # Confidence "0" is a placeholder, not an SFT target.
-            score_mask = score_mask & (ha_prompt_label_ids_chunk != placeholder_id)
-
-            # The supervised labels form a short suffix. Score only that suffix
-            # instead of materializing full-vocabulary logits for the prompt.
-            logits_to_keep = int(ha_label_mask_chunk.sum(dim=1).max().item())
-            token_logps = self._get_per_token_logps(
-                model,
-                ha_prompt_label_ids_chunk,
-                ha_attention_mask_chunk,
-                logits_to_keep,
-            )
-            suffix_mask = score_mask[:, -logits_to_keep:]
-            chunk_tokens = suffix_mask.sum()
-            chunk_loss = -(token_logps * suffix_mask).sum() / chunk_tokens.clamp(min=1)
-
-            accumulated_loss = accumulated_loss + chunk_loss * (chunk_tokens / total_label_tokens)
+        accumulated_loss = ha_sft_loss(
+            inputs["ha_prompt_label_ids"],
+            inputs["ha_label_mask"],
+            inputs["ha_attention_mask"],
+            placeholder_id,
+            lambda ids, attention, keep: self._get_per_token_logps(model, ids, attention, keep),
+        )
 
         self.sft_ha_losses.append(accumulated_loss.item())
         if last_minibatch:
