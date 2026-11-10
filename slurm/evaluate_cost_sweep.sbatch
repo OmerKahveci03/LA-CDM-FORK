@@ -32,7 +32,9 @@ if [[ ! "$COST_MULTIPLIER" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
     exit 2
 fi
 ARM="cost_${COST_MULTIPLIER//./p}"
-RUN_ROOT="outputs/cost_sweep/${ARM}"
+# RUN_ROOT overrides the arm folder, e.g. a moved earlier attempt:
+#   --export=ALL,COST_MULTIPLIER=1,ADAPTER_STEP=300,RUN_ROOT=outputs/cost_sweep/cost_1_attempt2
+RUN_ROOT="${RUN_ROOT:-outputs/cost_sweep/${ARM}}"
 TRAIN_DIR="$RUN_ROOT/train"
 
 if [[ -z "${ADAPTER_STEP:-}" ]]; then
