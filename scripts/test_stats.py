@@ -25,6 +25,9 @@ for every disease):
   split evenly). Approximate; a proper one needs the model's probability for every
   disease, which needs a GPU scoring pass.
 
+Prints the report and writes it to ``<run-root>/test_step_<focus>/test_stats.md`` with the
+numbers in ``test_stats.json`` beside it (``--out-dir`` changes the folder).
+
 Standard library only.
 
     python scripts/test_stats.py --run-root outputs/cost_sweep/cost_1_attempt2 --focus 600
@@ -270,8 +273,14 @@ def main() -> None:
     parser.add_argument("--focus", type=int, default=600, help="Step compared against every other run.")
     parser.add_argument("--resamples", type=int, default=5000)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--out", type=Path, help="JSON output (default: <run-root>/test_stats_step<focus>.json).")
+    parser.add_argument("--out-dir", type=Path,
+                        help="Where test_stats.md and test_stats.json go (default: <run-root>/test_step_<focus>/).")
     args = parser.parse_args()
+    lines: list[str] = []
+
+    def emit(text: str = "") -> None:
+        print(text)
+        lines.append(text)
 
     runs = load_runs(args.run_root, args.zero_shot)
     focus = f"step {args.focus}"
@@ -279,18 +288,18 @@ def main() -> None:
         sys.exit(f"No {args.run_root}/test_step_{args.focus:04d}/test_episodes.csv (found: {', '.join(runs) or 'none'})")
     rng = random.Random(args.seed)
 
-    print(f"# Test-set statistics ({args.resamples} resamples, seed {args.seed})\n")
+    emit(f"# Test-set statistics ({args.resamples} resamples, seed {args.seed})\n")
     intervals = {name: bootstrap_intervals(rows, args.resamples, rng) for name, rows in runs.items()}
     names = list(runs)
-    print("## 95% intervals per run\n")
-    print("| Metric | " + " | ".join(f"{n} (n={len(runs[n])})" for n in names) + " |")
-    print("|---|" + "---|" * len(names))
+    emit("## 95% intervals per run\n")
+    emit("| Metric | " + " | ".join(f"{n} (n={len(runs[n])})" for n in names) + " |")
+    emit("|---|" + "---|" * len(names))
     for key in ROWS:
         cells = []
         for name in names:
             value, low, high = intervals[name][key]
             cells.append(fmt(key, value) + ("" if low is None else f" [{fmt(key, low)}, {fmt(key, high)}]"))
-        print(f"| {key} | " + " | ".join(cells) + " |")
+        emit(f"| {key} | " + " | ".join(cells) + " |")
 
     comparisons = {}
     for name in names:
@@ -302,31 +311,34 @@ def main() -> None:
             raw = [c[key]["p_mcnemar" if key == "accuracy" else "p_permutation"] for c in comparisons.values()]
             for c, adjusted in zip(comparisons.values(), holm(raw)):
                 c[key]["p_holm"] = adjusted
-        print(f"\n## {focus} minus each other run (same patients)\n")
-        print("Accuracy p: exact McNemar; others: paired permutation. Holm across the comparisons per metric.\n")
-        print("| vs | Metric | Difference [95% CI] | p | p (Holm) |")
-        print("|---|---|---|---|---|")
+        emit(f"\n## {focus} minus each other run (same patients)\n")
+        emit("Accuracy p: exact McNemar; others: paired permutation. Holm across the comparisons per metric.\n")
+        emit("| vs | Metric | Difference [95% CI] | p | p (Holm) |")
+        emit("|---|---|---|---|---|")
         for name, c in comparisons.items():
             for key in PAIRED:
                 d = c[key]
                 p = d["p_mcnemar" if key == "accuracy" else "p_permutation"]
                 extra = (f" ({d['focus_only_correct']} vs {d['other_only_correct']} discordant)"
                          if key == "accuracy" else "")
-                print(f"| {name} (n={c['n_shared']}) | {key} | {fmt_diff(key, d['diff'])} "
+                emit(f"| {name} (n={c['n_shared']}) | {key} | {fmt_diff(key, d['diff'])} "
                       f"[{fmt_diff(key, d['low'])}, {fmt_diff(key, d['high'])}]{extra} | {fmt_p(p)} | {fmt_p(d['p_holm'])} |")
 
-    print(f"\n## {focus} vs the paper's LA-CDM (cost reward)\n")
-    print("| Metric | Paper | Ours [95% CI] | Paper inside our CI? |")
-    print("|---|---|---|---|")
+    emit(f"\n## {focus} vs the paper's LA-CDM (cost reward)\n")
+    emit("| Metric | Paper | Ours [95% CI] | Paper inside our CI? |")
+    emit("|---|---|---|---|")
     for key, paper in PAPER.items():
         value, low, high = intervals[focus][key]
-        print(f"| {key} | {fmt(key, paper)} | {fmt(key, value)} [{fmt(key, low)}, {fmt(key, high)}] | "
+        emit(f"| {key} | {fmt(key, paper)} | {fmt(key, value)} [{fmt(key, low)}, {fmt(key, high)}] | "
               f"{'yes' if low <= paper <= high else 'no'} |")
 
-    out = args.out or args.run_root / f"test_stats_step{args.focus}.json"
-    out.write_text(json.dumps({"intervals": intervals, "comparisons": comparisons, "paper": PAPER,
-                               "resamples": args.resamples, "seed": args.seed}, indent=2))
-    print(f"\nWrote {out}")
+    out_dir = args.out_dir or args.run_root / f"test_step_{args.focus:04d}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "test_stats.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (out_dir / "test_stats.json").write_text(json.dumps(
+        {"focus": focus, "intervals": intervals, "comparisons": comparisons, "paper": PAPER,
+         "resamples": args.resamples, "seed": args.seed}, indent=2), encoding="utf-8")
+    print(f"\nWrote {out_dir / 'test_stats.md'} and {out_dir / 'test_stats.json'}")
 
 
 if __name__ == "__main__":
