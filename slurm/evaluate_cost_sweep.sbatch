@@ -48,6 +48,29 @@ STEP_TAG=$(printf 'step_%04d' "$ADAPTER_STEP")
 ADAPTER_DIR="$TRAIN_DIR/adapters/$STEP_TAG"
 OUT_DIR="$RUN_ROOT/test_$STEP_TAG"
 
+# Hypothesis H1 (docs/HYPOTHESIS_H1.md): SCRIPTED_POLICY=none|all|random_matched
+# replaces the Decision Agent with a fixed test policy; the adapter's Hypothesis
+# Agent diagnoses. Output: $RUN_ROOT/scripted_<policy>_step_<N>/ (kept apart from
+# test_step_* so the normal test figures ignore it). random_matched copies each
+# patient's test count from SCRIPTED_REFERENCE (default: this step's normal test run).
+SCRIPTED_ARGS=()
+if [[ -n "${SCRIPTED_POLICY:-}" ]]; then
+    if [[ ! "$SCRIPTED_POLICY" =~ ^(none|all|random_matched)$ ]]; then
+        echo "SCRIPTED_POLICY must be none, all or random_matched: $SCRIPTED_POLICY" >&2
+        exit 2
+    fi
+    OUT_DIR="$RUN_ROOT/scripted_${SCRIPTED_POLICY}_$STEP_TAG"
+    SCRIPTED_ARGS+=("evaluation.scripted_policy=$SCRIPTED_POLICY" "evaluation.scripted_seed=${SCRIPTED_SEED:-0}")
+    if [[ "$SCRIPTED_POLICY" == "random_matched" ]]; then
+        SCRIPTED_REFERENCE="${SCRIPTED_REFERENCE:-$RUN_ROOT/test_$STEP_TAG/test_episodes.csv}"
+        if [[ ! -f "$SCRIPTED_REFERENCE" ]]; then
+            echo "random_matched needs the reference episodes: $SCRIPTED_REFERENCE is missing" >&2
+            exit 2
+        fi
+        SCRIPTED_ARGS+=("evaluation.scripted_reference_episodes=$SCRIPTED_REFERENCE")
+    fi
+fi
+
 if [[ ! -f "$ADAPTER_DIR/adapter_config.json" ||
       ( ! -f "$ADAPTER_DIR/adapter_model.safetensors" && ! -f "$ADAPTER_DIR/adapter_model.bin" ) ]]; then
     echo "No complete adapter at $ADAPTER_DIR" >&2
@@ -66,8 +89,9 @@ COMMIT="$(git rev-parse --short HEAD)$(git diff --quiet HEAD -- src configs prom
 log_job() {
     printf '%s\tjob=%s\tcommit=%s\t%s\n' "$(date '+%F %T')" "$JOB_ID" "$COMMIT" "$1" >> "$RUN_ROOT/jobs.log"
 }
-log_job "test eval of $STEP_TAG started"
-trap 'rc=$?; log_job "test eval of $STEP_TAG exit=$rc"' EXIT
+EVAL_NAME="test eval of $STEP_TAG${SCRIPTED_POLICY:+ (scripted $SCRIPTED_POLICY)}"
+log_job "$EVAL_NAME started"
+trap 'rc=$?; log_job "$EVAL_NAME exit=$rc"' EXIT
 
 export VLLM_USE_V1=0
 export HYDRA_FULL_ERROR=1
@@ -92,6 +116,7 @@ echo "[SLURM] Started: $(date)"
     evaluation.metrics_output_file="$OUT_DIR/metrics.json" \
     dataset.small_sample=false \
     training.vllm_gpu_memory_utilization=0.9 \
+    "${SCRIPTED_ARGS[@]}" \
     wandb.mode=disabled
 
 echo "[SLURM] Finished: $(date)"

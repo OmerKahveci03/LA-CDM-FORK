@@ -3,6 +3,13 @@ metrics_output_file:
 run_name_suffix: "-eval"
 base_model: false
 
+# Hypothesis H1 (docs/HYPOTHESIS_H1.md): replace the Decision Agent with a fixed
+# test-ordering policy; the Hypothesis Agent diagnoses. null = normal evaluation.
+# none | all | random_matched (needs scripted_reference_episodes: a test_episodes.csv)
+scripted_policy: null
+scripted_reference_episodes: null
+scripted_seed: 0
+
 # Real-world USD costs per diagnostic test (used for avg diagnostic cost metric)
 test_costs_usd:
   ct: 1306

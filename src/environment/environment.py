@@ -29,7 +29,8 @@ class Trajectory:
     hypotheses, confidence scores, and the final diagnosis.
     """
 
-    def __init__(self, text: str, test_results: dict[str, str], patient_history: str) -> None:
+    def __init__(self, text: str, test_results: dict[str, str], patient_history: str, patient_id=None) -> None:
+        self.patient_id = patient_id
         self.text: str = text
         self.output = None  # latest vLLM RequestOutput
         self.token_mask: list[bool] = []
@@ -244,7 +245,10 @@ class Environment:
             HA SFT/conf-cal tensors, and per-trajectory hypothesis/confidence data.
         """
         # Initialize trajectories
-        trajectories = [Trajectory(prompt, input['test_results'], input['patient_history']) for prompt, input in zip(prompts_text, inputs)]
+        trajectories = [
+            Trajectory(prompt, input['test_results'], input['patient_history'], patient_id=input.get('patient_id'))
+            for prompt, input in zip(prompts_text, inputs)
+        ]
         # clear ha_prompt_ids
         self.ha_prompt_ids.clear()
 
@@ -256,9 +260,9 @@ class Environment:
                 active_prompts = self._generate_hypothesis(active_trajectories, model, sampling_params, processing_class)
             else:
                 active_prompts = [trajectory.text for trajectory in active_trajectories]
-            # Generate responses
+            # Decision Agent turn
             tokenizer = model.get_tokenizer()
-            outputs = model.generate(active_prompts, sampling_params=sampling_params, use_tqdm=False)
+            outputs = self._decide(active_trajectories, active_prompts, model, sampling_params)
             for output, trajectory in zip(outputs, active_trajectories):
                 trajectory.update_output(output, tokenizer)
 
@@ -356,6 +360,14 @@ class Environment:
             episode_records=episode_records,
         )
         
+
+    def _decide(self, trajectories: list[Trajectory], prompts: list[str], model, sampling_params) -> list:
+        """One Decision Agent turn per active trajectory: vLLM outputs, in order.
+
+        ``ScriptedDecisionEnvironment`` overrides this to replace the model with a
+        fixed test-ordering policy.
+        """
+        return model.generate(prompts, sampling_params=sampling_params, use_tqdm=False)
 
     def step(self, trajectory: Trajectory, step: int, tokenizer) -> None:
         """Advance a single trajectory by one turn.

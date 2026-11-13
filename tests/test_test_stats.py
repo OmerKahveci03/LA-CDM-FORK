@@ -28,6 +28,15 @@ class StatsTest(unittest.TestCase):
     def test_holm(self):
         self.assertEqual(stats.holm([0.01, 0.04, 0.03]), [0.03, 0.06, 0.06])
 
+    def test_score_final_hypothesis(self):
+        rows = [
+            {"label": "appendicitis", "diagnosis": "pancreatitis", "correct": False, "final_hypothesis": "appendicitis"},
+            {"label": "appendicitis", "diagnosis": "appendicitis", "correct": True, "final_hypothesis": "unknown"},
+        ]
+        scored = stats.score_final_hypothesis(rows)
+        self.assertEqual([(r["diagnosis"], r["correct"]) for r in scored], [("appendicitis", True), ("", False)])
+        self.assertEqual(rows[0]["diagnosis"], "pancreatitis")  # input untouched
+
     def test_wilson(self):
         low, high = stats.wilson(205, 240)
         self.assertAlmostEqual(low, 0.804, places=3)

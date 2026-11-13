@@ -130,17 +130,29 @@ def prepare_environment(cfg: DictConfig) -> Environment:
         with open(cfg.environment.hypothesis_prompt_template_file, "r") as f:
             hypothesis_prompt_template = f.read()
 
-    return Environment(
+    kwargs = dict(
         prompt_template=prompt_template,
         max_length=cfg.environment.max_length,
         max_steps=cfg.environment.max_steps,
         disease_list=cfg.dataset.disease_list,
-        test_list=cfg.dataset.lab_tests + cfg.dataset.imaging_tests + cfg.dataset.other_tests,
+        test_list=list(cfg.dataset.lab_tests) + list(cfg.dataset.imaging_tests) + list(cfg.dataset.other_tests),
         generate_hypothesis=cfg.environment.generate_hypothesis,
         hypothesis_prompt_template=hypothesis_prompt_template,
         generate_confidence_calibration=cfg.environment.generate_confidence_calibration,
         seed=cfg.training.seed,
     )
+    # Evaluation only: a fixed test-ordering policy replaces the Decision Agent (H1).
+    policy = cfg.get("evaluation", {}).get("scripted_policy")
+    if policy:
+        from src.environment.scripted_environment import ScriptedDecisionEnvironment
+
+        return ScriptedDecisionEnvironment(
+            **kwargs,
+            policy=policy,
+            reference_episodes=cfg.evaluation.get("scripted_reference_episodes"),
+            policy_seed=cfg.evaluation.get("scripted_seed", 0),
+        )
+    return Environment(**kwargs)
 
 
 def prepare_reward_functions(cfg: DictConfig) -> list:

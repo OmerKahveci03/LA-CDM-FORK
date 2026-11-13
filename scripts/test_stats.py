@@ -228,6 +228,15 @@ def load_runs(run_root: Path, zero_shot: Path | None) -> dict[str, list[dict]]:
     return runs
 
 
+def score_final_hypothesis(rows: list[dict]) -> list[dict]:
+    """Rows whose prediction is the Hypothesis Agent's final hypothesis instead of the diagnosis."""
+    out = []
+    for row in rows:
+        hypothesis = row["final_hypothesis"] if row["final_hypothesis"] in DISEASES else ""
+        out.append({**row, "diagnosis": hypothesis, "correct": bool(hypothesis) and hypothesis == row["label"]})
+    return out
+
+
 def align(a: list[dict], b: list[dict]) -> tuple[list[dict], list[dict]]:
     """Rows of both runs for the patients they share, in the same order (first episode each)."""
     first_a = {r["patient_id"]: r for r in reversed(a)}
@@ -275,6 +284,14 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out-dir", type=Path,
                         help="Where test_stats.md and test_stats.json go (default: <run-root>/test_step_<focus>/).")
+    parser.add_argument("--extra", action="append", default=[], metavar="LABEL=FOLDER",
+                        help="Another test folder to include and compare against (repeatable), e.g. "
+                             "'attempt2 step 600=outputs/cost_sweep/cost_1_attempt2/test_step_0600'.")
+    parser.add_argument("--score", choices=("diagnosis", "final_hypothesis"), default="diagnosis",
+                        help="What counts as the prediction: the Decision Agent's diagnosis (default) or the "
+                             "Hypothesis Agent's final hypothesis (H1: isolates which tests were ordered).")
+    parser.add_argument("--skip-other-steps", action="store_true",
+                        help="Of the run's test_step_* folders, keep only the focus step.")
     args = parser.parse_args()
     lines: list[str] = []
 
@@ -283,12 +300,24 @@ def main() -> None:
         lines.append(text)
 
     runs = load_runs(args.run_root, args.zero_shot)
+    for item in args.extra:
+        label, sep, folder = item.partition("=")
+        csv_path = Path(folder) / "test_episodes.csv"
+        if not sep or not csv_path.is_file():
+            sys.exit(f"--extra needs LABEL=FOLDER with FOLDER/test_episodes.csv: {item}")
+        runs[label] = read_rows(csv_path)
     focus = f"step {args.focus}"
     if focus not in runs:
         sys.exit(f"No {args.run_root}/test_step_{args.focus:04d}/test_episodes.csv (found: {', '.join(runs) or 'none'})")
+    if args.skip_other_steps:
+        runs = {name: rows for name, rows in runs.items() if name == focus or not name.startswith("step ")}
+    if args.score == "final_hypothesis":
+        runs = {name: score_final_hypothesis(rows) for name, rows in runs.items()}
     rng = random.Random(args.seed)
 
     emit(f"# Test-set statistics ({args.resamples} resamples, seed {args.seed})\n")
+    if args.score == "final_hypothesis":
+        emit("Prediction = the Hypothesis Agent's final hypothesis (undiagnosed = no valid hypothesis).\n")
     intervals = {name: bootstrap_intervals(rows, args.resamples, rng) for name, rows in runs.items()}
     names = list(runs)
     emit("## 95% intervals per run\n")
