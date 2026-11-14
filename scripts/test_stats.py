@@ -292,21 +292,33 @@ def main() -> None:
                              "Hypothesis Agent's final hypothesis (H1: isolates which tests were ordered).")
     parser.add_argument("--skip-other-steps", action="store_true",
                         help="Of the run's test_step_* folders, keep only the focus step.")
+    parser.add_argument("--focus-dir", metavar="LABEL=FOLDER",
+                        help="Use this folder's test_episodes.csv as the focus run instead of "
+                             "<run-root>/test_step_<focus> (H2: compare Hypothesis Agents). Needs --out-dir; "
+                             "--run-root, --focus and --zero-shot are then ignored.")
     args = parser.parse_args()
+    if args.focus_dir and not args.out_dir:
+        sys.exit("--focus-dir needs --out-dir")
     lines: list[str] = []
 
     def emit(text: str = "") -> None:
         print(text)
         lines.append(text)
 
-    runs = load_runs(args.run_root, args.zero_shot)
+    if args.focus_dir:
+        focus_label, sep, focus_folder = args.focus_dir.partition("=")
+        if not sep or not (Path(focus_folder) / "test_episodes.csv").is_file():
+            sys.exit(f"--focus-dir needs LABEL=FOLDER with FOLDER/test_episodes.csv: {args.focus_dir}")
+        runs = {focus_label: read_rows(Path(focus_folder) / "test_episodes.csv")}
+    else:
+        runs = load_runs(args.run_root, args.zero_shot)
     for item in args.extra:
         label, sep, folder = item.partition("=")
         csv_path = Path(folder) / "test_episodes.csv"
         if not sep or not csv_path.is_file():
             sys.exit(f"--extra needs LABEL=FOLDER with FOLDER/test_episodes.csv: {item}")
         runs[label] = read_rows(csv_path)
-    focus = f"step {args.focus}"
+    focus = focus_label if args.focus_dir else f"step {args.focus}"
     if focus not in runs:
         sys.exit(f"No {args.run_root}/test_step_{args.focus:04d}/test_episodes.csv (found: {', '.join(runs) or 'none'})")
     if args.skip_other_steps:

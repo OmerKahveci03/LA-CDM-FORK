@@ -112,8 +112,52 @@ is A′ (or A), so the rows read A′ − B, A′ − C and A′ − D.
 
 | Adapter | A′ (DA tests, HA final) | B none | C random, matched | D all | A′ − C [95% CI], p | Verdict |
 |---|---|---|---|---|---|---|
-| Attempt 2, step 600 | | | | | | |
-| Attempt 3, step 600 | | | | | | |
+| Attempt 2, step 600 | 87.1% [82.2, 90.7], 1.19 tests, $1,259 | 62.9% [56.6, 68.8], $0 | 64.6% [58.3, 70.4], 1.19 tests, $494 | 86.2% [81.3, 90.0], 9.30 tests, $4,082 | **+22.5 pts [+16.7, +28.3]**, McNemar p < 0.001 (59 vs 5 discordant) | **H1 rejected**: the DA's choices matter |
+| Attempt 3, step 600 | 77.5% [71.8, 82.3], 1.50 tests, $1,115 | 67.5% [61.3, 73.1], $0 | 67.9% [61.8, 73.5], 1.50 tests, $623 | 79.2% [73.6, 83.8], 9.30 tests, $4,082 | **+9.6 pts [+4.6, +14.6]**, McNemar p < 0.001 (31 vs 8 discordant) | **H1 rejected** (replicates) |
+
+Run log:
+- 2026-11-12: arm B, attempt 2 (smoke test). 240/240 ended in a diagnosis, 0 invalid,
+  0 tests. The HA over-predicts pancreatitis (85 predicted vs 54 true) and calls 22 of
+  96 appendicitis cases diverticulitis.
+- 2026-11-14: attempt 2 analysis (`cost_1_attempt2/h1_step_0600/test_stats.md`, scored by the
+  HA's final hypothesis).
+  - Other paired differences: A′ − B = +24.2 [+18.3, +30.4]; A′ − D = +0.8 [−2.5, +4.2],
+    p = 0.815. The trained DA matches "all tests" with 8.1 fewer tests and $2,823 less
+    per case.
+  - Arm D reaches 86.2%, well below LDTL's 94%. Per the note in section 4, the HA is a
+    bottleneck and H2 is needed regardless.
+  - Caveat, not part of the decision rule: at the same count, the random arm spends $494
+    vs the DA's $1,259. Random mostly draws cheap lab panels; the DA orders imaging.
+    Follow-up check: a fixed "always order imaging" rule.
+  - Side finding: the HA's final hypothesis (87.1%) beats the DA's own diagnosis (85.4%).
+- 2026-11-14: secondary analysis, scored by the DA's diagnosis
+  (`cost_1_attempt2/h1_step_0600_diagnosis/test_stats.md`). It agrees with the primary:
+  - A − C = +20.8 [+14.2, +27.5], 65 vs 15 discordant, p < 0.001;
+  - A − B = +22.5 [+15.0, +29.6];
+  - A − D = −0.8 [−5.4, +4.2], p = 0.864.
+  - New: the DA's diagnosis turn loses pancreatitis cases the HA had right. Recall is 64.8%
+    by the DA vs 81.5% by the HA's hypothesis, while cholecystitis recall goes from 80.0% to
+    84.6%. The DA also leaves 2.1% undiagnosed. Using the HA's final hypothesis as the
+    answer gives 87.1% vs 85.4%, with no training (not yet tested for significance).
+- 2026-11-14: attempt 3 replication (`cost_1/h1_step_0600/test_stats.md`, scored by the HA's
+  final hypothesis).
+  - H1 is rejected again: A′ − C = +9.6 [+4.6, +14.6]; A′ − B = +10.0 [+5.4, +15.0];
+    A′ − D = −1.7 [−5.4, +2.1], p = 0.523.
+  - Arm D, with all tests and no DA involved, is 7 points below attempt 2 (79.2% vs 86.2%).
+    That gap matches the A′ gap between the adapters (77.5% vs 87.1%), so attempt 3's lower
+    score comes from its HA.
+  - Attempt 3's HA has a pancreatitis blind spot: recall is 41–44% in every arm, with or
+    without tests. Its confidence tells us little: AUROC_correct is 0.52–0.59, vs 0.75 for
+    attempt 2.
+
+**Conclusion (both adapters).** The trained DA's test choice clearly beats random tests at
+the same count, and roughly matches "all tests" at about ¼ to ⅓ of the cost. The HA sets the
+ceiling (arm D), and that ceiling varies by 7 points between two near-identical training runs.
+
+**Plan change, made after seeing the results and stated openly.** The decision rule in
+section 4 says to build H3 (the search reward) first. We do H2 (a frozen, stronger HA) first
+instead. Reason: arm D shows better search cannot lift accuracy past the HA's ceiling. H2 also
+gives H3 a stable judge to compute information gain with. Section 4 itself is unchanged.
 
 ## 7. What follows
 

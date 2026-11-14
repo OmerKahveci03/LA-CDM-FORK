@@ -409,8 +409,20 @@ more calibration samples per step. Compare each against attempt 2 at matched ste
 - Week 7 report drafted: `weekly_reports/week_7/WEEKLY_REPORT.tex`.
 - **Next experiment, H1** (does the DA's choice of tests matter?): pre-registered in
   `docs/HYPOTHESIS_H1.md` (Nov 12), with commands and the decision rule. The code is ready
-  (`SCRIPTED_POLICY=none|random_matched|all` in `slurm/evaluate_cost_sweep.sbatch`);
-  no runs yet. Literature basis: `docs/LITERATURE_REVIEW.md`.
+  (`SCRIPTED_POLICY=none|random_matched|all` in `slurm/evaluate_cost_sweep.sbatch`).
+  Literature basis: `docs/LITERATURE_REVIEW.md`.
+  **Done Nov 14: rejected on both adapters.**
+  - The DA's tests beat random tests at the same count: +22.5 points (attempt 2) and +9.6
+    (attempt 3).
+  - The DA matches "all tests" at about ¼ to ⅓ of the cost.
+  - The HA caps accuracy: 86.2% / 79.2% with all tests.
+  - Results: H1 section 6.
+- **Next experiment, H2** (a standalone HA, trained by SFT on full and partial records,
+  then frozen): pre-registered in `docs/HYPOTHESIS_H2.md` (Nov 14).
+  - Code: `src/ha/`, `src/train_ha_sft.py`, `src/score_ha.py`, `slurm/train_ha_sft.sbatch`,
+    `slurm/score_ha.sbatch`, `scripts/h2_table.py`.
+  - The existing training and evaluation code is unchanged; `test_stats.py` only gains
+    `--focus-dir`.
 - Copy `train/episodes/` and `test_step_*/` off `/blue` periodically as a backup.
 - Recurring unknown `Complete Blood Count (CBC)` requests: likely a missing test alias.
 - Improvements to test against this baseline: `docs/IMPROVEMENT_EXPERIMENTS.md`.
