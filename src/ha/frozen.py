@@ -33,8 +33,11 @@ class FrozenHA:
         self.adapter_name = adapter_name
         self.diseases = tuple(diseases)
         self._da_adapter = model.active_adapter
+        was_training = model.training
         model.load_adapter(adapter_dir, adapter_name=adapter_name, is_trainable=False)
         model.set_adapter(self._da_adapter)  # load_adapter does not activate it; make sure
+        # PEFT's load_adapter(is_trainable=False) also puts the whole model in eval mode.
+        model.train(was_training)
         for name, param in model.named_parameters():
             if f".{adapter_name}." in name:
                 param.requires_grad_(False)
