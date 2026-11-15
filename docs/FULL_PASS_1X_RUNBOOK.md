@@ -423,6 +423,24 @@ more calibration samples per step. Compare each against attempt 2 at matched ste
     `slurm/score_ha.sbatch`, `scripts/h2_table.py`.
   - The existing training and evaluation code is unchanged; `test_stats.py` only gains
     `--focus-dir`.
+  **Done Nov 15: supported for partial records.** All figures are new HA (seed 0) minus old2.
+  - With all tests: +2.1 [−2.1, +6.2], no detectable gain.
+  - With no tests: +15.0 [+8.7, +21.3].
+  - With random tests: +16.2 [+10.0, +22.1].
+  - With the DA's own tests: +0.8, so no gain on the records the DA actually produces.
+  - Calibration is better everywhere, and there is no pancreatitis blind spot.
+  - The stability check is not met: seeds 90.0% vs 93.8% with all tests, p = 0.022.
+  - With the new HA, the DA's tests beat random tests by only +8.0 points (+23.3 with old2).
+  - Results: H2 section 9. Frozen HA: `outputs/ha_sft/seed_0/adapter`.
+- **Next: step 2** (the DA with the frozen new HA inside the environment), then H3 (an
+  information-gain reward, judged by the frozen HA).
+  - Step 2 is pre-registered in `docs/STEP2_COMBINED.md` (Nov 15).
+  - Code: `src/ha/frozen.py`, `src/environment/frozen_ha_environment.py`,
+    `src/evaluate_frozen_ha.py`, `slurm/evaluate_frozen_ha.sbatch`.
+  - The only change to existing files is the `evaluation.frozen_ha_dir: null` config default.
+  - H3 is planned as two runs: H3a (frozen HA, the original cost reward) and H3b (frozen HA,
+    the information-gain reward), so that the effects of the HA and the reward can be
+    separated.
 - Copy `train/episodes/` and `test_step_*/` off `/blue` periodically as a backup.
 - Recurring unknown `Complete Blood Count (CBC)` requests: likely a missing test alias.
 - Improvements to test against this baseline: `docs/IMPROVEMENT_EXPERIMENTS.md`.

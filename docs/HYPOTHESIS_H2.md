@@ -164,17 +164,76 @@ output: it compares against the full LA-CDM system, not an HA.
 
 | HA | D_all | B_none | C_random2 | A_da2 | A_da3 | AUROC (D) | ECE (D) | Pancreatitis recall (D) |
 |---|---|---|---|---|---|---|---|---|
-| base (no adapter) | | | | | | | | |
-| old2 (attempt 2, step 600) | | | | | | | | |
-| old3 (attempt 3, step 600) | | | | | | | | |
-| **new0** (H2, seed 0) | | | | | | | | |
-| new1 (H2, seed 1) | | | | | | | | |
+| base (no adapter) | 75.4% | 61.3% | 63.3% | 82.5% | 77.1% | 0.958 | 10.8% | 68.5% |
+| old2 (attempt 2, step 600) | 87.9% | 63.3% | 64.6% | 87.9% | 80.4% | 0.979 | 5.6% | 85.2% |
+| old3 (attempt 3, step 600) | 78.3% | 65.8% | 66.7% | 80.4% | 75.8% | 0.976 | 5.4% | 37.0% |
+| **new0** (H2, seed 0) | **90.0%** | **78.3%** | **80.8%** | **88.8%** | **85.8%** | **0.989** | **4.5%** | **83.3%** |
+| new1 (H2, seed 1) | 93.8% | 76.2% | 81.7% | 91.7% | 86.7% | 0.993 | 1.2% | 88.9% |
+
+All from four-way scoring on the same 240 test patients (`outputs/ha_sft/scores/h2_table.md`;
+also has `C_random3` and ECE/Brier for every arm).
 
 | Comparison (arm D) | Difference [95% CI], p | Verdict |
 |---|---|---|
-| new0 − old2 | | |
+| new0 − old2 | +2.1 pts [−2.1, +6.2], p = 0.42 (15 vs 10) | No detectable gain with all tests (row 3) |
+
+| Row 3 check: new0 − old2 | Difference [95% CI], p | Condition (CI lower bound > 0) |
+|---|---|---|
+| `B_none` | +15.0 pts [+8.7, +21.3], p < 0.001 (51 vs 15) | Met |
+| `C_random2` | +16.2 pts [+10.0, +22.1], p < 0.001 (51 vs 12) | Met |
+
+**Verdict (2026-11-15): H2 supported for partial records.** The new HA is not detectably better with all
+tests. With no tests or with a few tests, which is how the DA works, it is about 15 points better. Next: step 2
+(section 10). **Stability check: not met** (seeds 3.8 points apart in arm D, p = 0.022).
 
 Run log:
+
+- 2026-11-15. Training: seed 0 has 7,676 rows and seed 1 has 7,677; both have 720 validation rows. Both ran
+  959 optimizer steps, and both kept the step-720 checkpoint (validation loss 0.0471 and 0.0469).
+- Four-way scoring of the old HAs agrees with their generated answers in H1. In arm D, old2 gets 87.9% vs
+  86.2% generated, and old3 gets 78.3% vs 79.2%.
+- **Stability check: not met.** In arm D, seed 1 minus seed 0 is +3.8 points, against a pre-registered
+  limit of 3 points. The old HAs differed by 9.6 points under this scoring, and by 7.0 points when generated.
+  The gap is significant: new0 − new1 = −3.7 points [−6.7, −0.8], McNemar p = 0.022 (2 vs 11 discordant).
+  The two seeds' validation losses are almost identical (0.0471 vs 0.0469), so validation loss does not tell
+  them apart.
+- Arm D primary result: new0 − old2 = +2.1 points [−2.1, +6.2], McNemar p = 0.42 (15 vs 10 discordant). The
+  interval includes 0, so the decision rule's third row applies, and the verdict depends on `B_none` and `C_random2`.
+- new0 − old3 in arm D = +11.7 points [+6.2, +17.1], p < 0.001.
+- `B_none`: new0 − old2 = **+15.0 points [+8.7, +21.3]**, p < 0.001 (51 vs 15 discordant). This meets the first
+  of the two conditions in row 3.
+  - new0 − old3 = +12.5 points [+6.7, +18.3], p < 0.001.
+  - new0 − new1 = +2.1 points [−2.1, +6.2], p = 0.44.
+  - old2's pancreatitis recall with no tests (81.5%) comes from over-calling pancreatitis: its precision is
+    50.6%, against the new HA's 80.0%.
+- `C_random2`: new0 − old2 = **+16.2 points [+10.0, +22.1]**, p < 0.001 (51 vs 12 discordant). This meets the
+  second condition.
+  - new0 − old3 = +14.2 points [+7.9, +20.0].
+  - new0 − new1 = −0.8 points [−5.0, +3.3], p = 0.85.
+- **The old HA inflated H1's measure of the search.** A − C compares the DA's tests with random tests at the
+  same count.
+  - With old2 it is 87.9 − 64.6 = +23.3 points.
+  - With new0 it is 88.8 − 80.8 = +8.0 points.
+  - Most of H1's gap came from the old HA being poor at reading short records, not from the DA choosing
+    better tests.
+  - H1's verdict still stands, because +8 points is above its 5-point threshold. But a better search has less
+    room to help than H1 suggested, which matters for H3.
+  - The paired test for this new-HA comparison has not been run.
+- With the new HA, random tests add little over no tests: 80.8% vs 78.3%, at $494 per case.
+- `A_da2` (the DA's own tests): new0 − old2 = +0.8 points [−2.9, +4.6], p = 0.83 (12 vs 10 discordant).
+  - new0 − old3 = +8.3 points [+3.3, +13.3].
+  - new0 − new1 = −2.9 points [−5.8, −0.4], McNemar p = 0.065.
+  - **On the records the DA actually produces, the new HA does not beat old2.** The DA's 1–2 tests (mostly
+    imaging) already make those records easy to read. The new HA's gain is on records without the key test.
+  - So step 2 (the old DA with the new HA) should be expected near 88–89% at the same cost, not much higher.
+  - The new HA's main value is that it is:
+    - robust: no old3-style blind spot;
+    - calibrated: Brier 0.066 vs 0.085;
+    - a fixed judge for H3's information-gain reward, which needs good readings of partial records.
+- The ECE and Brier score in `test_stats.py` are computed from the 0–10 confidence of the top answer, being
+  right or wrong. The table above uses the multi-class versions from `h2_table.py`, so the numbers differ.
+- In every arm, the new HA has lower ECE and Brier score than every old HA. Its pancreatitis recall is
+  about 83%, the same as old2's; old3 had about 37%.
 
 ## 10. What follows
 

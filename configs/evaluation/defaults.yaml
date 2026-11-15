@@ -10,6 +10,10 @@ scripted_policy: null
 scripted_reference_episodes: null
 scripted_seed: 0
 
+# Step 2 (docs/STEP2_COMBINED.md): a frozen standalone HA adapter gives the hypotheses.
+# Used only by src/evaluate_frozen_ha.py; src/evaluate.py ignores it. null = not used.
+frozen_ha_dir: null
+
 # Real-world USD costs per diagnostic test (used for avg diagnostic cost metric)
 test_costs_usd:
   ct: 1306
