@@ -441,6 +441,15 @@ more calibration samples per step. Compare each against attempt 2 at matched ste
   - H3 is planned as two runs: H3a (frozen HA, the original cost reward) and H3b (frozen HA,
     the information-gain reward), so that the effects of the HA and the reward can be
     separated.
+  - **Done Nov 15: no detectable change in accuracy; calibration much better.** Seed 0 minus
+    the original:
+    - DA's diagnosis 85.4% vs 85.4%, +0.0 [−3.8, +3.7];
+    - final hypothesis 89.2% vs 87.1%, +2.1 [−1.7, +5.8];
+    - cost $1,285 vs $1,259, +$27 [−$30, +$91];
+    - ECE 5.2% vs 14.8%; AUROC_correct 0.936 vs 0.750.
+    - The DA's diagnosis trails the HA's final hypothesis by 3.8 points, mostly on
+      pancreatitis (68.5% vs 83.3% recall), so the DA ignores some correct HA answers.
+    - Results: `docs/STEP2_COMBINED.md` section 6. **Next: H3a** (`docs/HYPOTHESIS_H3.md`).
 - Copy `train/episodes/` and `test_step_*/` off `/blue` periodically as a backup.
 - Recurring unknown `Complete Blood Count (CBC)` requests: likely a missing test alias.
 - Improvements to test against this baseline: `docs/IMPROVEMENT_EXPERIMENTS.md`.

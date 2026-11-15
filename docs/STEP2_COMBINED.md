@@ -93,15 +93,49 @@ The output goes to `$R/frozen_ha_seed<s>_step_0600/`, in the usual test-run form
 
 ## 6. Results (fill in)
 
-| Run | Accuracy (diagnosis) | Accuracy (final hypothesis) | Tests | Cost | Undiagnosed |
-|---|---|---|---|---|---|
-| Original attempt 2 | 85.4% | 87.1% | 1.19 | $1,259 | |
-| Combined, HA seed 0 | | | | | |
-| Combined, HA seed 1 | | | | | |
+Filled in November 15, 2026 (`outputs/step2_stats/{diagnosis,final_hypothesis}/`).
 
-| Paired difference vs the original | Difference [95% CI], p | Reading |
+| Run | Accuracy (diagnosis) | Accuracy (final hypothesis) | Tests | Cost | Undiagnosed | ECE | AUROC_correct |
+|---|---|---|---|---|---|---|---|
+| Original attempt 2 | 85.4% | 87.1% | 1.19 | $1,259 | 2.1% | 14.8% | 0.750 |
+| Combined, HA seed 0 | 85.4% | 89.2% | 1.20 | $1,285 | 1.7% | 5.2% | 0.936 |
+| Combined, HA seed 1 | 84.2% | 90.8% | 1.16 | $1,248 | 1.7% | 3.6% | 0.924 |
+
+| Paired difference, seed 0 minus the original | Difference [95% CI], p | Reading |
 |---|---|---|
-| Diagnosis accuracy, seed 0 | | |
-| Cost, seed 0 | | |
+| Diagnosis accuracy | +0.0 pts [−3.8, +3.7], p = 1.00 (11 vs 11 discordant) | No detectable change |
+| Final-hypothesis accuracy | +2.1 pts [−1.7, +5.8], p = 0.38 (13 vs 8) | No detectable change |
+| Tests per case | +0.01 [−0.04, +0.06], p = 0.77 | No change |
+| Cost | +$27 [−$30, +$91], p = 0.41 | No change |
+
+**Predictions vs results:**
+
+| Measure | Predicted | Result | Met? |
+|---|---|---|---|
+| Accuracy, DA's diagnosis | 87–90% | 85.4% | No |
+| Accuracy, final hypothesis | 88–90% | 89.2% | Yes (but not significant) |
+| Tests per case | ≥ 1.19 | 1.20 | Yes |
+| Cost | about the same or higher | $1,285, same | Yes |
+
+**Reading: no detectable change in accuracy or cost; calibration is much better.**
+- The DA's diagnosis is unchanged (85.4%), so the DA does not depend on the old HA's way of
+  answering. Swapping the HA in does no harm.
+- The DA behaves the same: the same tests (1.20 vs 1.19) at the same cost.
+- The HA's confidence is now meaningful. ECE fell from 14.8% to 5.2%, and AUROC_correct
+  rose from 0.750 to 0.936. The 95% intervals do not overlap.
+- **The DA ignores some correct HA answers.** In the same run, the HA's final hypothesis is
+  right 89.2% of the time and the DA's diagnosis 85.4%: a 3.8-point gap, larger than the
+  original's 1.7. The gap is mostly pancreatitis: the HA's final recall is 83.3%, the DA's
+  68.5% (11 cholecystitis cases were called pancreatitis and 9 pancreatitis cases were
+  called cholecystitis). This is a direct motivation for H3: a DA trained alongside this HA
+  might learn to trust it. (The gap is unpaired within one run; no test was run.)
+- Seed 1 agrees: diagnosis −1.2 points vs seed 0 (p = 0.65), final hypothesis +1.7 (p = 0.39).
 
 Run log:
+- Both runs completed on all 240 test patients (about 44 minutes each). `wc -l` on
+  `test_episodes.csv` gives about 1,200 lines because fields hold quoted newlines; `n = 240`
+  in `metrics.json`.
+- ECE, Brier and AUROC are the same in the two score tables, because they use the HA's
+  confidence in both.
+- Paper comparison (seed 0): class-mean accuracy 84.1% and macro F1 83.0% (paper 81.3%
+  both), cost $1,285 (paper $1,296); the paper's values are inside our 95% intervals.
