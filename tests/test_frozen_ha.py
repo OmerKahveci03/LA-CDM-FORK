@@ -92,6 +92,7 @@ class FrozenEnvironmentTest(unittest.TestCase):
         new.request_count, new.diagnosis, new.invalid = 1, "pancreatitis", False
         kwargs = self.frozen._collect_reward_function_kwargs([new])
         self.assertEqual(kwargs[0]["ha_probs"], [[0.1, 0.1, 0.1, 0.7]])
+        self.assertEqual(kwargs[0]["ha_diseases"], list(DISEASES))
         self.assertEqual(kwargs[0]["diagnosis"], "pancreatitis")
 
     def test_disease_order_checked(self):

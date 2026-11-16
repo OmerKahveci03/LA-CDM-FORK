@@ -94,4 +94,5 @@ class FrozenHAEnvironment(Environment):
         kwargs = super()._collect_reward_function_kwargs(trajectories)
         for kw, trajectory in zip(kwargs, trajectories):
             kw["ha_probs"] = list(getattr(trajectory, "ha_probs", []))
+            kw["ha_diseases"] = list(self.disease_order)  # the order of each ha_probs vector
         return kwargs

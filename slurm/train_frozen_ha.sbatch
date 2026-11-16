@@ -14,8 +14,10 @@
 #
 #   sbatch --export=ALL,ARM=h3a slurm/train_frozen_ha.sbatch            # frozen HA, original reward
 #   sbatch --export=ALL,ARM=h3a,SMOKE=1 slurm/train_frozen_ha.sbatch    # 4 steps, 2 val patients
+#   sbatch --export=ALL,ARM=h3b slurm/train_frozen_ha.sbatch            # + HA-belief reward
 #
-# ARM=h3b (information-gain reward) is not implemented yet and is refused.
+# H3b uses configs/reward_function/h3b.yaml: the same reward plus the frozen HA's final
+# probability of the correct disease (src/reward_function/ha_belief_reward.py).
 # Resubmit the same command after a time-out: it resumes from the newest checkpoint in
 # outputs/h3/<arm>_ha<seed>/train/. Same DA settings as attempt 2 (4 generations,
 # batch 1, 128-token completions, 2048-token transcripts, invalid episodes not charged),
@@ -30,11 +32,11 @@ PYTHON_BIN=/blue/prismap-ai-core/omerkahveci/envs/la-cdm/bin/python
 cd "$REPO_DIR"
 mkdir -p logs
 
-ARM="${ARM:?Set ARM=h3a}"
+ARM="${ARM:?Set ARM=h3a or ARM=h3b}"
 case "$ARM" in
-    h3a) ;;
-    h3b) echo "ARM=h3b (information-gain reward) is not implemented yet" >&2; exit 2 ;;
-    *) echo "ARM must be h3a: $ARM" >&2; exit 2 ;;
+    h3a) REWARD_CONFIG=defaults ;;
+    h3b) REWARD_CONFIG=h3b ;;
+    *) echo "ARM must be h3a or h3b: $ARM" >&2; exit 2 ;;
 esac
 HA_SEED="${HA_SEED:-0}"
 FROZEN_HA_DIR="outputs/ha_sft/seed_${HA_SEED}/adapter"
@@ -111,7 +113,7 @@ export VLLM_USE_V1=0
 export HYDRA_FULL_ERROR=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 echo "[SLURM] Job: $JOB_ID  Commit: $COMMIT  Host: $(hostname)"
-echo "[SLURM] Arm: $ARM  Frozen HA: $FROZEN_HA_DIR  Output: $TRAIN_DIR"
+echo "[SLURM] Arm: $ARM  Reward: $REWARD_CONFIG  Frozen HA: $FROZEN_HA_DIR  Output: $TRAIN_DIR"
 echo "[SLURM] Resume: ${CHECKPOINT:-none (step 0)}  Target: $MAX_STEPS steps"
 echo "[SLURM] Started: $(date)"
 
@@ -125,6 +127,7 @@ echo "[SLURM] Started: $(date)"
     "hydra.output_subdir=.hydra/${STARTED}" \
     "experiment.name=la-cdm-${ARM}-ha${HA_SEED}" \
     evaluation.frozen_ha_dir="$FROZEN_HA_DIR" \
+    "reward_function=$REWARD_CONFIG" \
     "reward_function.reward_functions.2.multiplier=1" \
     "training.loss_schedule.phases=[{name:da,steps:100,learning_rate:1e-5}]" \
     "${SMOKE_ARGS[@]}" \

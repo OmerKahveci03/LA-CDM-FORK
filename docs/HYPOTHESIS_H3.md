@@ -1,8 +1,7 @@
 # Hypothesis H3: train the Decision Agent against a frozen HA (H3a, H3b)
 
-**DRAFT, November 15, 2026.** H3a is fully specified. H3b's reward is waiting on a decision
-(section 4). Once that is decided, sections 1–5 are fixed **before any H3 result exists**.
-Results go in section 7.
+**Pre-registered November 15, 2026, before any H3 result exists.** Sections 1–6 are fixed.
+H3b's reward is option 1, λ = 1. Results go in section 7.
 
 ## 1. Hypothesis
 
@@ -56,11 +55,36 @@ Running both lets us tell the effect of the HA apart from the effect of the rewa
   - tests per case over training on validation, the drift to zero tests seen in attempt 2;
   - comparison with attempt 2's original test run (85.4% at $1,259).
 
-The decision rule is to be fixed together with H3b's, before H3a results are looked at.
-Proposal: same form as H1 and H2, with the 95% CI of the paired accuracy difference
-compared against 0.
+**Decision rule (fixed November 15, 2026, before any H3 result).** Same form as H1 and H2.
+The measure is the paired accuracy of the DA's diagnosis on the 240 test patients, with an
+exact McNemar test and a paired-bootstrap 95% CI (`scripts/test_stats.py --score diagnosis`):
 
-## 4. H3b's reward: decision needed
+| 95% CI of the difference | Reading |
+|---|---|
+| Entirely above 0 | Supported |
+| Includes 0 | No detectable gain |
+| Entirely below 0 | Worse |
+
+- **H3a:** H3a minus step 2 (seed-0 HA).
+- **H3b:** the same rule twice:
+  - H3b minus step 2 (the overall effect);
+  - H3b minus H3a (the effect of the reward alone).
+- Cost, tests per case and final-hypothesis accuracy are secondary and do not change the
+  reading.
+
+## 4. H3b's reward
+
+**Decided November 15, 2026: option 1, λ = 1.** H3b is identical to H3a except for this
+added reward term.
+
+**Code:**
+- `src/reward_function/ha_belief_reward.py` (`HABeliefReward`): weight × the frozen HA's
+  last probability of the label. Invalid episodes get 0, as they get no test cost.
+- `configs/reward_function/h3b.yaml`: the default reward plus this term.
+- `ARM=h3b` in `slurm/train_frozen_ha.sbatch` selects it; output in `outputs/h3/h3b_ha0`.
+- Tests: `tests/test_ha_belief_reward.py`, including a check that p₀ cancels within a group.
+- `reward_total` in the episode CSVs includes the term. Its value per episode is
+  `reward_total − reward_diagnosis − reward_format − reward_test_cost`.
 
 All options add a term from the frozen HA's probability of the correct disease, p(y). The
 HA is scored after the patient history alone (p₀) and again after each test result.
@@ -87,6 +111,8 @@ information gain", p_final(y) − p₀(y), trains exactly like a reward of p_fin
 ```bash
 sbatch --export=ALL,ARM=h3a,SMOKE=1 slurm/train_frozen_ha.sbatch   # 4 steps on 2 patients
 sbatch --export=ALL,ARM=h3a slurm/train_frozen_ha.sbatch           # resubmit after each 24 h time-out
+sbatch --export=ALL,ARM=h3b,SMOKE=1 slurm/train_frozen_ha.sbatch   # H3b smoke
+sbatch --export=ALL,ARM=h3b slurm/train_frozen_ha.sbatch           # H3b; can run alongside H3a
 $PY scripts/validation_curve.py outputs/h3/h3a_ha0/train           # choose the checkpoint on validation
 ```
 
