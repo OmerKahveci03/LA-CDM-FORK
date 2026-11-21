@@ -450,6 +450,11 @@ more calibration samples per step. Compare each against attempt 2 at matched ste
     - The DA's diagnosis trails the HA's final hypothesis by 3.8 points, mostly on
       pancreatitis (68.5% vs 83.3% recall), so the DA ignores some correct HA answers.
     - Results: `docs/STEP2_COMBINED.md` section 6. **Next: H3a** (`docs/HYPOTHESIS_H3.md`).
+- **H3 done Nov 17** (`docs/HYPOTHESIS_H3.md` section 7). Both arms used the step-700
+  checkpoint, chosen on validation.
+  - H3a − step 2: +0.4 [−2.5, +3.3], no detectable gain. Cost is $260 lower (p < 0.001).
+  - H3b: −10.8 vs step 2 and −11.2 vs H3a, so worse. It almost stopped ordering CT.
+  - Both runs were unstable after step 700. H3a was stopped by the collapse guard at 900.
 - Copy `train/episodes/` and `test_step_*/` off `/blue` periodically as a backup.
 - Recurring unknown `Complete Blood Count (CBC)` requests: likely a missing test alias.
 - Improvements to test against this baseline: `docs/IMPROVEMENT_EXPERIMENTS.md`.

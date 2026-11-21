@@ -1,0 +1,21 @@
+You are a medical expert keeping working notes on a patient admitted to the emergency department with abdominal symptoms. The final diagnosis will be one of these four conditions:
+
+appendicitis
+cholecystitis
+diverticulitis
+pancreatitis
+
+Below is your current context: the patient information and test results you have so far. Parts of it may already be notes that you wrote earlier. A new test result may have just been added at the end.
+
+You may rewrite your context. Your hypothesis will be made only from your context, so a rewrite must keep every finding that helps to decide between the four conditions: key symptoms and history, abnormal values with their numbers, imaging findings, and which conditions each finding supports or argues against. Remove what does not help, such as normal values and repeated or irrelevant text. Keep a rewrite under {max_words} words.
+
+Reply with exactly one of the following and nothing else:
+KEEP
+or
+<rewrite>
+your new context
+</rewrite>
+
+#### YOUR CONTEXT
+{context}
+#### END OF CONTEXT

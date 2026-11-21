@@ -1,0 +1,343 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{CAI6734 Weekly Report 8: Locating the Bottleneck and Separating the Two Agents}
+\author{Omer Kahveci}
+\date{November 17, 2026}
+
+\begin{document}
+\maketitle
+
+\section{Project Objective}
+
+Week 7 ended with a full-pass baseline that matched the paper (85.4\% test
+accuracy at \$1,259 per case) and two open weaknesses: the Decision Agent (DA)
+drifted toward ordering no tests, and the Hypothesis Agent's (HA's) confidence
+did not improve during training. I planned to review the literature on agentic
+search and to pick one improvement to the agentic loop.
+
+This week I turned that plan into a sequence of three hypotheses, each
+pre-registered in writing (prediction, primary comparison and decision rule)
+before any result existed:
+
+\begin{itemize}
+  \item \textbf{H1:} does the DA's \emph{choice} of tests matter, or only how
+        many it orders?
+  \item \textbf{H2:} is an HA trained on its own, then frozen, a better
+        diagnoser than the HA inside the shared LA-CDM adapter?
+  \item \textbf{H3:} does a DA trained against that frozen HA perform better,
+        with the original reward (H3a) and with a reward for informative tests
+        (H3b)?
+\end{itemize}
+
+\section{Accomplishments}
+
+\subsection*{My Contributions This Week}
+
+\begin{itemize}
+  \item Wrote a literature review on reinforcement learning for multi-turn,
+        information-seeking agents and sequential diagnosis, which motivated
+        H1--H3.
+  \item Finished the third baseline run (attempt 3, with last week's HA
+        training fix) and tested it.
+  \item Built scripted test-ordering policies (no tests, random tests, all
+        tests) for H1 and ran them on two trained adapters.
+  \item Built a standalone HA training and scoring pipeline for H2, trained two
+        seeds, and scored five HAs on identical patient records.
+  \item Integrated the frozen HA into the LA-CDM environment as a second LoRA
+        adapter on the same model, with unit tests checking that the DA's
+        transcript format is unchanged.
+  \item Implemented DA-only training against the frozen HA and an
+        information-gain reward for H3, and ran both arms (900 steps each).
+\end{itemize}
+
+All comparisons below use the same 240 test patients, paired tests (exact
+McNemar for accuracy, paired bootstrap for intervals) and 95\% confidence
+intervals, as in Week 7. Checkpoints were always chosen on validation.
+
+\textbf{Names used below.}
+\begin{itemize}
+  \item \textbf{Untrained model:} Llama-3-8B-Instruct with no training on this
+        task.
+  \item \textbf{Baseline model:} our LA-CDM reproduction from Week 7 (85.4\%
+        accuracy). Its two roles share one LoRA adapter: the \emph{baseline DA}
+        and the \emph{baseline HA}.
+  \item \textbf{New HA:} the HA trained on its own in H2 (seed 0 unless
+        stated), then frozen.
+  \item \textbf{Retrained DA:} a new DA trained against the frozen new HA in
+        H3, with the original reward (H3a) or with an added belief reward (H3b).
+\end{itemize}
+
+\subsection*{Attempt 3: The HA Training Fix Alone}
+
+Attempt 3 repeated the baseline model's training with only the HA loss fix. Its step-600
+checkpoint, chosen on validation, reached 75.4\% test accuracy at \$1,115 per
+case, about 10 points below the baseline model. Its HA almost never diagnosed
+pancreatitis correctly (44\% recall). With one run per code version, this gap
+cannot be attributed to the fix; it is at least partly run-to-run variance. That
+variance is itself the main finding: two nearly identical training runs gave
+HAs that differ by 7 points (see H1 below).
+
+\subsection*{H1: The DA's Choice of Tests Matters}
+
+The literature suggested that a random test planner paired with a strong
+diagnoser can beat LA-CDM on this benchmark (LDTL, 2026). H1 tested this on our
+model. I kept the trained HA and replaced only the DA's test choices, scoring
+every arm by the HA's final hypothesis. The rule, fixed in advance, was that H1
+would be supported if the interval for ``DA tests minus random tests'' lay
+inside $\pm$5 points.
+
+\begin{table}[ht]
+  \centering
+  \caption{H1: accuracy of the baseline HA's last hypothesis given different test
+  choices. Only the tests change between rows; every row is scored by the HA, not by
+  the DA. The first row is therefore 87.1\%, not the baseline model's 85.4\%, which
+  is the DA's final diagnosis.}
+  \label{tab:h1}
+  \small
+  \begin{tabular}{lrrr}
+    \toprule
+    Tests given to the HA & HA accuracy & Tests per case & Cost per case \\
+    \midrule
+    Chosen by the baseline DA & 87.1\% & 1.19 & \$1,259 \\
+    None (history only) & 62.9\% & 0 & \$0 \\
+    Random, same number per patient & 64.6\% & 1.19 & \$494 \\
+    All available tests & 86.2\% & 9.30 & \$4,082 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\textbf{H1 was rejected.} The DA's tests beat random tests at the same count by
+22.5 points [+16.7, +28.3] ($p < 0.001$), and attempt 3 replicated the result
+(+9.6 [+4.6, +14.6]). The DA also matched ordering every test at about a third
+of the cost. However, the ``all tests'' arm revealed the real limit: even with
+every result, the baseline HA reached only 86.2\% and attempt 3's HA 79.2\%,
+against about 94\% for LDTL's separately trained diagnoser. Better search cannot
+raise accuracy above the HA's ceiling.
+
+\textbf{A deviation, stated openly.} The H1 rule said to build the search reward
+next. Because the HA's ceiling caps any search improvement, I did H2 (a better
+HA) first. I changed the plan after seeing the H1 results and recorded it as
+such; the rule itself was not changed.
+
+\subsection*{H2: A Standalone HA Is a Better Diagnoser}
+
+In LA-CDM both agents share one LoRA adapter and are trained in turns, so
+updates for one role can undo the other's, and the HA learns only from records
+the DA happens to produce. For H2 I trained a separate LoRA adapter for the HA
+alone, with supervised fine-tuning on four views of every training patient:
+history only, all tests, and two random subsets of tests. The adapter has the
+same size as the shared one, so a gain is not due to more parameters.
+
+Generating answers made HAs hard to compare, so I scored every HA the same way:
+its answer is the disease with the highest probability, and its confidence is
+that probability. This gives a full probability distribution for every case.
+Each HA read exactly the same test results, copied from the H1 runs.
+
+\begin{table}[ht]
+  \centering
+  \caption{H2: accuracy of each HA on identical records. Columns give the test
+  results shown to every HA for each patient: none; random tests (as many as the
+  baseline DA ordered); the tests the baseline DA ordered; or every available
+  test. Every row is scored by its highest-probability disease. ECE is with all
+  tests. The main comparison is the baseline HA against the new HA (seed 0).}
+  \label{tab:h2}
+  \small
+  \begin{tabular}{lrrrrr}
+    \toprule
+    HA & No tests & Random tests & Baseline DA's tests & All tests & ECE \\
+    \midrule
+    Untrained model (zero-shot) & 61.3\% & 63.3\% & 82.5\% & 75.4\% & 10.8\% \\
+    Baseline HA (shared adapter) & 63.3\% & 64.6\% & 87.9\% & 87.9\% & 5.6\% \\
+    New HA, seed 0 & 78.3\% & 80.8\% & 88.8\% & 90.0\% & 4.5\% \\
+    New HA, seed 1 & 76.2\% & 81.7\% & 91.7\% & 93.8\% & 1.2\% \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Three notes on Table~\ref{tab:h2}:
+\begin{itemize}
+  \item The baseline HA scores 87.9\% on the baseline DA's tests here. That is
+        higher than the baseline model's 85.4\%, which is the DA's final diagnosis,
+        and its generated hypothesis was right 87.1\% of the time (Table~\ref{tab:h1}).
+        The differences come from the DA overriding the HA and from reading
+        probabilities instead of generated text.
+  \item The untrained model does better with the baseline DA's tests than with
+        all tests. This is likely because the all-tests records are long (about
+        nine tests, mostly lab panels), and an untrained model reads one
+        focused imaging report more reliably. I have not verified this. Every
+        trained HA does as well or better with all tests.
+  \item The zero-shot row is scored by probabilities, so it cannot fail the
+        answer format. It is not comparable to the Week 7 zero-shot system
+        (8.8\%), where the untrained model also acted as the DA and mostly
+        failed the format.
+\end{itemize}
+
+\textbf{H2 was supported for partial records.} The new HA (seed 0) beat the baseline
+HA by 15.0 points [+8.7, +21.3] with no tests and 16.2 points [+10.0, +22.1]
+with random tests. With all tests the gain was +2.1 [$-$2.1, +6.2], not
+detectable. It was also better calibrated and no longer over-called
+pancreatitis. One pre-registered check failed: the two seeds differ by 3.7
+points with all tests ($p = 0.022$), although their validation losses were
+almost identical, so validation could not have told them apart. Seed 0 was
+fixed in advance as the HA to freeze, and it is used in everything below. Finally,
+the new HA differs from the baseline HA in both its adapter and its training data, so
+this result does not separate the effect of the separate adapter from that of
+training on partial records.
+
+\subsection*{Combining the Baseline DA with the Frozen New HA}
+
+Before retraining anything, I placed the frozen new HA inside the environment
+next to the baseline DA, as a second LoRA adapter on the same model. The DA's
+transcript has exactly the same format as before; only the source of the
+hypothesis changes.
+
+\begin{table}[ht]
+  \centering
+  \caption{The baseline DA with the baseline HA and with the frozen new HA.}
+  \label{tab:step2}
+  \small
+  \begin{tabular}{lrrr}
+    \toprule
+    Metric & Baseline model & Baseline DA + new HA & Difference [95\% CI] \\
+    \midrule
+    Accuracy, DA's diagnosis & 85.4\% & 85.4\% & +0.0 [$-$3.8, +3.7] \\
+    Accuracy, HA's final hypothesis & 87.1\% & 89.2\% & +2.1 [$-$1.7, +5.8] \\
+    Cost per case & \$1,259 & \$1,285 & +\$27 [$-$\$30, +\$91] \\
+    Calibration error (ECE) & 14.8\% & 5.2\% & \\
+    AUROC, confidence vs.\ correct & 0.750 & 0.936 & \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Accuracy and cost did not change, but the confidence the DA reads became far
+more informative. The key observation is that the HA's final hypothesis was
+right 89.2\% of the time while the DA's diagnosis was right 85.4\% of the time:
+the DA overrides correct answers, mostly on pancreatitis (HA recall 83.3\%,
+DA recall 68.5\%). The DA had been trained alongside the baseline HA, whose confidence was
+inflated, which is a plausible reason it does not rely on the hypothesis.
+
+\subsection*{H3: Retraining the DA Against the Frozen HA}
+
+H3 trains a new DA from the untrained model while the new HA stays frozen. Two arms
+separate the effect of the partner from the effect of the reward:
+
+\begin{itemize}
+  \item \textbf{H3a:} the original reward (diagnosis, format and test cost).
+  \item \textbf{H3b:} the same reward plus the frozen HA's final probability of
+        the correct disease. GRPO compares rollouts of the same patient, and
+        the HA's belief before any test is the same for all of them, so this
+        term trains exactly like the total information gained by the tests. A
+        test therefore pays off when it raises that probability by more than
+        its cost.
+\end{itemize}
+
+The decision rule was fixed before any H3 result: an arm is supported only if the
+95\% interval of its paired accuracy gain is entirely above zero. H3a is compared
+with the baseline DA + new HA (the same HA, but a DA trained with the baseline HA).
+H3b is compared with the baseline DA + new HA and with H3a.
+
+Both arms trained for 900 steps. By validation accuracy, step 700 was the best
+checkpoint in both (73.8\% for H3a and 70.4\% for H3b), and I tested only those
+two checkpoints. Table~\ref{tab:h3} gives the test results.
+
+\begin{table}[ht]
+  \centering
+  \caption{H3 test results (240 cases). All runs except the baseline model use
+  the frozen new HA. Accuracy is shown for the DA's final diagnosis and for the
+  HA's last hypothesis.}
+  \label{tab:h3}
+  \small
+  \begin{tabular}{lrrrr}
+    \toprule
+    Run & DA's diagnosis & HA's last hypothesis & Tests per case & Cost per case \\
+    \midrule
+    Baseline model & 85.4\% & 87.1\% & 1.19 & \$1,259 \\
+    Baseline DA + new HA & 85.4\% & 89.2\% & 1.20 & \$1,285 \\
+    Retrained DA (H3a) & 85.8\% & 88.3\% & 1.27 & \$1,025 \\
+    Retrained DA + belief reward (H3b) & 74.6\% & 78.3\% & 2.10 & \$536 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\textbf{H3a: no detectable accuracy gain, but cheaper.} Compared with the baseline DA + new HA,
+accuracy changed by +0.4 points [$-$2.5, +3.3] ($p = 1.00$), so under the
+pre-registered rule H3a is not an improvement. Cost per case fell by \$260
+[$-$\$348, $-$\$182] ($p < 0.001$), about 20\%, a secondary outcome. H3a kept
+ordering CT (66.7\% of patients against 68.3\% for the baseline DA) but nearly stopped
+ordering ultrasound (3.8\% against 20.0\%), using blood panels instead. The gap
+between the DA's diagnosis and the HA's final hypothesis narrowed from 3.8 to
+2.5 points, which suggests the retrained DA relies slightly more on the HA.
+
+\textbf{H3b: worse.} The belief reward lowered accuracy by 10.8 points
+[$-$16.7, $-$5.4] against the baseline DA + new HA and by 11.2 points [$-$16.2, $-$6.2] against
+H3a (both $p < 0.001$), while cutting cost to \$536 per case. Test rates show
+why: H3b almost stopped ordering CT (1.7\% of patients against 66.7\% for H3a)
+and ordered cheap tests instead, such as a complete blood count (74.2\%), an
+electrolyte panel (35.8\%) and a radiograph (33.3\%). The HA's own final
+hypothesis fell to 78.3\%, so the loss comes from less informative tests, not
+from the DA ignoring the HA. My interpretation, which I have not verified, is
+that the frozen HA is often fairly confident after the history alone. A CT then
+raises its probability of the correct disease by less than the CT's cost, while
+several cheap tests each move it slightly for almost no cost. The reward
+measures marginal changes in the HA's belief, which is not the same as getting
+the diagnosis right.
+
+\subsection*{What I Learned}
+
+Asking narrow questions in order located the bottleneck. H1 showed the search
+was already good, and that the diagnoser set the ceiling. H2 showed that an HA
+trained on its own, on partial records, diagnoses far better from thin records.
+Combining it with the baseline DA showed that a better
+diagnoser alone is not enough when the DA was trained not to trust it, and H3a
+showed that retraining the DA against it lowered cost rather than raising
+accuracy. H3b showed that a reward which sounds aligned with good diagnosis,
+information gained by the diagnoser, can be satisfied more cheaply by many
+uninformative tests than by one decisive test. Writing
+each decision rule in advance kept me from reading the results the way I hoped,
+for example when H2's stability check failed. Two near-identical runs can
+differ by 7 to 10 points, so single-run comparisons between code versions
+(the baseline model against attempt 3) need to be treated with care.
+
+\section{Challenges}
+
+DA-only training was unstable late in both H3 runs. In H3a the DA nearly
+stopped ordering tests at step 800 (0.34 per case), and at step 900, 95\% of
+validation cases were undiagnosed, so the automatic collapse guard stopped the
+run. H3b dropped to 54\% undiagnosed at step 800 and then recovered. I checked
+the job logs and ruled out the restart after the 24-hour time limit as the
+cause. Both step-700 checkpoints come before the instability, but it limits how
+long the DA can be trained at this learning rate.
+
+H3a's cost reduction is a secondary outcome; the pre-registered primary outcome,
+accuracy, did not change. All H2 and H3 results use one HA seed and one DA seed. The two HA seeds differ
+significantly, so the H3 results may depend on which HA was frozen. As before,
+the 240-patient test set gives intervals of about $\pm$4--6 points for paired
+differences, and the diverticulitis class has only 25 test cases.
+
+\section{Next Steps}
+
+\begin{itemize}
+  \item Inspect H3b transcripts to confirm why CT stopped being ordered, and
+        decide whether a reweighted belief reward (a smaller weight, or a larger
+        reward for a correct diagnosis) is worth one more run. Per-test credit
+        (as in IGPO) would likely face the same problem, because it uses the same
+        measure of gain.
+  \item Investigate the late-training instability, for example with a lower
+        learning rate or a stronger KL penalty, before any longer runs.
+  \item Repeat H3a with the second HA seed to check whether its cost reduction
+        holds, since the two HA seeds differ significantly.
+  \item Start assembling the final report around the main finding so far: the
+        shared adapter limits the HA, and separating the two agents gives a
+        better-calibrated system at equal accuracy and lower cost.
+\end{itemize}
+
+\section{AI Disclaimer}
+
+I used Anthropic Claude to assist with designing the experiments, implementing
+the code, inspecting training and evaluation logs, computing the statistics,
+and drafting this report.
+
+\end{document}

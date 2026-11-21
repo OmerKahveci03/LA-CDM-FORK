@@ -1,0 +1,16 @@
+# H4 stage 4 (docs/HYPOTHESIS_H4.md): the CLM Hypothesis Agent next to the DA.
+# Not in the default config list: add it with the Hydra override "+clm=defaults"
+# (slurm/clm_train_joint.sbatch, slurm/clm_evaluate_joint.sbatch), so other runs are unaffected.
+ha_dir: null                 # starting CLM HA adapter (stage 3: outputs/clm/ha_train/<run>/adapter)
+edit_template_file: prompts/clm_hypothesis_agent.txt
+edit: true                   # false: the HA never rewrites (append-only)
+update: true                 # false: frozen CLM HA (the comparison arm for "learning together")
+learning_rate: 1.0e-5
+w_eff: 0.5                   # weight of the success-gated efficiency advantage (context tokens)
+sft_weight: null             # null = 1/B, B = HA SFT rows from the step's rollouts (D6)
+replay: 8                    # mixed-disease SFT records per HA update
+max_new_tokens: 512
+max_words: 250
+temperature: 1.0             # sampling temperature of the HA's replies during training
+max_update_tokens: 7000      # HA training rows longer than this are skipped (GPU memory)
+notes_log: true              # write every HA turn to <output>/clm_notes.jsonl

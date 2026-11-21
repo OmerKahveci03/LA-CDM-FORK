@@ -126,4 +126,96 @@ $PY scripts/validation_curve.py outputs/h3/h3a_ha0/train           # choose the 
 
 ## 7. Results (fill in)
 
+Filled in November 17, 2026 (`outputs/h3_stats/`). All runs use the seed-0 frozen HA except
+"original" (attempt 2 with its own HA). One test rollout per patient, near-greedy.
+
+| Run | Accuracy (diagnosis) | Accuracy (final hypothesis) | Tests | Cost | Undiagnosed |
+|---|---|---|---|---|---|
+| Original attempt 2 | 85.4% | 87.1% | 1.19 | $1,259 | 2.1% |
+| Step 2 (attempt-2 DA + frozen HA) | 85.4% | 89.2% | 1.20 | $1,285 | 1.7% |
+| **H3a**, step 700 | 85.8% | 88.3% | 1.27 | $1,025 | 0.4% |
+| **H3b**, step 700 | 74.6% | 78.3% | 2.10 | $536 | 0.4% |
+
+| Comparison (paired, DA's diagnosis) | Difference [95% CI], p | Reading (section 3 rule) |
+|---|---|---|
+| H3a − step 2 | +0.4 [−2.5, +3.3], p = 1.00 (8 vs 7) | **No detectable gain** |
+| H3b − step 2 | −10.8 [−16.7, −5.4], p < 0.001 (10 vs 36) | **Worse** |
+| H3b − H3a | −11.2 [−16.2, −6.2], p < 0.001 (7 vs 34) | **Worse** |
+
+**H3b: worse.** The HA-belief reward made the DA cheaper but less accurate.
+- H3b orders more tests than step 2 (+0.90 per case) but spends $750 less per case, because
+  it has almost stopped ordering CT. Share of patients with each test:
+
+  | Test | Step 2 | H3a | H3b |
+  |---|---|---|---|
+  | CT | 68.3% | 66.7% | **1.7%** |
+  | Ultrasound | 20.0% | 3.8% | 12.1% |
+  | Radiograph | 5.0% | 2.1% | 33.3% |
+  | Complete blood count | 8.3% | 30.8% | 74.2% |
+  | Electrolyte panel | 0.4% | 0.4% | 35.8% |
+  | Urinalysis | 1.3% | 1.7% | 27.1% |
+  | Liver function panel | 15.0% | 7.9% | 18.3% |
+  | Basic metabolic panel | 0.8% | 13.8% | 6.7% |
+- The HA's own final hypothesis also falls, from 89.2% to 78.3% (−10.8 [−15.4, −6.7]). The
+  tests H3b chooses give the HA less information, so the loss comes from the search itself,
+  not from the DA ignoring the HA.
+- Diverticulitis precision falls to 39.6% (step 2: 71.9%), and appendicitis recall to 85.4%
+  (99.0%).
+- Likely mechanism (the test rates confirm the behaviour; the cause is inferred): the
+  reward makes a CT worth ordering only when it raises p(y) by more than its cost (0.128).
+  After the history, the frozen HA is often already fairly sure, so a CT's measured gain is
+  usually smaller than that. Cheap labs cost almost nothing and move p(y) a little. So the
+  per-patient reward favours several cheap tests over one CT. The resulting errors are
+  rarer per group than the savings, and the diagnosis reward does not outweigh them at 4
+  rollouts per patient. The belief term rewards marginal gains in the HA's probability,
+  not getting the diagnosis right.
+
+**H3a: no detectable accuracy gain; cheaper (secondary).**
+- Accuracy is unchanged: +0.4 [−2.5, +3.3].
+- Cost per case is $260 lower ([−$348, −$182], p < 0.001), $1,025 vs $1,285, with slightly
+  more tests (+0.07, p = 0.032). H3a keeps CT, nearly drops ultrasound (20.0% → 3.8%) and
+  uses blood panels instead.
+- The gap between the DA's diagnosis and the HA's final hypothesis shrinks from 3.8 to 2.5
+  points (not tested).
+- Diverticulitis precision falls (59.0% vs 71.9%), and pancreatitis recall rises (74.1% vs
+  68.5%); neither is tested.
+- Cost is secondary under the rule, so H3a's reading stays "no detectable gain". But the
+  result is a same-accuracy, cheaper system: with this HA, the DA reaches the same accuracy
+  for about 20% less.
+
+**Overall.** Training the DA against the frozen HA did not raise accuracy but lowered cost
+at equal accuracy. Adding the HA-belief reward traded about 11 points of accuracy for a
+further $490 saving, by giving up CT. Per-test credit (option 3) would face the same
+problem, since it would use the same measure of gain. Any follow-up needs a reward that
+values accuracy more strongly, for example λ < 1 or a larger diagnosis reward.
+
 Run log:
+- **Nov 17, checkpoint choice (validation only, before any test run): step 700 for both.**
+  Validation accuracy (sampled, 4 rollouts per case):
+
+  | Run | Best step | Accuracy | Undiagnosed | Tests | Cost | Runner-up |
+  |---|---|---|---|---|---|---|
+  | H3a | 700 | 73.8% | 11.5% | 1.27 | $954 | step 400, 73.3% |
+  | H3b | 700 | 70.4% | 7.3% | 1.95 | $663 | step 600, 67.8% |
+
+- **Instability late in training (not yet explained):**
+  - **H3a:** tests per case fell to 0.34 at step 800, the drift to zero tests seen in
+    attempt 2. At step 900, 95.1% of validation cases were undiagnosed, matching the untrained
+    model (step 0: 94.9%). No `training_complete.json` was written, so the collapse guard
+    probably stopped the run.
+  - **H3b:** 54.3% undiagnosed at step 800, then 19.7% at step 900.
+  - **Checked against `jobs.log`: the restarts do not explain it.**
+    - H3a's first job ran without a break from step 0 to 875, so the step-800 drift happened
+      inside one job.
+    - H3a resumed from checkpoint-875, and the collapse guard stopped it at step 900
+      (`collapse_detected.json`: 95.1% ≥ 95%).
+    - H3b resumed from checkpoint-700; its step-800 dip and the recovery at step 900 both
+      came after that restart. A broken resume, such as one that lost the DA's weights, would
+      have made step 800 look untrained (about 95% undiagnosed), not 54%, and it would not have
+      recovered.
+    - So the instability is real training behaviour: DA-only updates at lr 1e-5 do not stay
+      stable to 900 steps.
+  - Both step-700 checkpoints come before the instability. The H3a adapter is from the
+    uninterrupted first job; H3b's is the checkpoint its second job resumed from.
+- H3b orders more tests than H3a (1.95 vs 1.27 at step 700), but they are cheaper ($663 vs
+  $954). Its accuracy on diagnosed cases is lower (76.0% vs 83.3%).
