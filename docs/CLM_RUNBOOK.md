@@ -1,6 +1,10 @@
 # CLM Hypothesis Agent (H4): runbook
 
-Every job for H4 (`docs/HYPOTHESIS_H4.md`), in order, with where its output goes. Background:
+> **Alternative, not the current H4.** This is the *context-editing* CLM. The meeting's "CLM" turned
+> out to be a **Contrastive** Language Model; see `docs/HYPOTHESIS_H4.md` and
+> `docs/CONTRASTIVE_RUNBOOK.md`. The plan for this alternative is `docs/HYPOTHESIS_H4_CONTEXT_EDITING.md`.
+
+Every job for H4 (`docs/HYPOTHESIS_H4_CONTEXT_EDITING.md`), in order, with where its output goes. Background:
 `docs/CLM_PRIMER.md`.
 
 All output is under **`outputs/clm/`**. Nothing outside it is written, and nothing existing

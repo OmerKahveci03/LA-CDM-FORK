@@ -1,7 +1,11 @@
 # Context Language Models (CLMs): a primer for this project
 
+> **Alternative, not the current H4.** This is the *context-editing* CLM. The meeting's "CLM" turned
+> out to be a **Contrastive** Language Model; see `docs/HYPOTHESIS_H4.md` and
+> `docs/CONTRASTIVE_RUNBOOK.md`. The plan for this alternative is `docs/HYPOTHESIS_H4_CONTEXT_EDITING.md`.
+
 A plain-language guide to the paper `docs/literature/22968_Context_Language_Models.pdf`
-(anonymous submission to ICLR 2027) and to what H4 (`docs/HYPOTHESIS_H4.md`) builds from it.
+(anonymous submission to ICLR 2027) and to what H4 (`docs/HYPOTHESIS_H4_CONTEXT_EDITING.md`) builds from it.
 Read from top to bottom.
 
 ## 1. What "context" is

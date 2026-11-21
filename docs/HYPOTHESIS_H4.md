@@ -1,216 +1,124 @@
-# Hypothesis H4: the HA as a Context Language Model, learning together with the DA
+# Hypothesis H4: the HA as a Contrastive Language Model, learning together with the DA
 
-**DRAFT, November 21, 2026.** It replaces an earlier draft based on a misreading ("CLM" as
-a contrastive model, kept in `docs/CONTRASTIVE_PRIMER.md`).
+**Written November 21, 2026, before any H4 result exists.** Sections 1–6 are fixed; results
+go in section 8.
 
-- **Source:** "Context Language Models" (`docs/literature/22968_Context_Language_Models.pdf`).
-- **Background reading:** `docs/CLM_PRIMER.md`.
-
-The decisions in section 7 come first. Sections 1–6 are then fixed **before any H4 result
-exists**.
+- **Source:** the meeting suggestion "try a CLM model as the hypothesis agent: a mapping between
+  patient state and the final output; embed the notes properly". "CLM" is the
+  **Contrastive Language Model** of Contrastive-LM/CLM (Kwok, Kang, Suresh, Saad-Falcon,
+  Pavone, Ré, Mirhoseini, 2026; https://github.com/Contrastive-LM/CLM; a blog post, not a
+  peer-reviewed paper).
+- **Background:** `docs/CONTRASTIVE_PRIMER.md`.
+- **Commands and outputs:** `docs/CONTRASTIVE_RUNBOOK.md`.
+- **Code:** `src/contrastive_ha/`.
+- **An earlier plan** that read "CLM" as a *context-editing* model is kept as an alternative
+  (`docs/HYPOTHESIS_H4_CONTEXT_EDITING.md`, `src/clm/`). It has not been run.
 
 ## 1. Hypothesis
 
-An HA that **maintains its own patient-state note**, editing its context instead of only
-appending to it, diagnoses better than an append-only HA. A DA trained **together** with
-such an HA, as two separate adapters, beats a DA trained against a frozen append-only HA
-(H3a).
+A contrastive HA diagnoses at least as well as the H2 HA, and a DA trained while that HA keeps
+learning beats one trained against a frozen copy. The contrastive HA is:
+- a **frozen** Llama-3-8B-Instruct that embeds the patient state (the HA prompt);
+- two small trained **projection heads** that map the state and each disease into one space;
+- the most aligned disease is the hypothesis.
 
 | Part | Question | Training |
 |---|---|---|
-| **H4a** | Does context editing help the HA at all? | None: same model, editing vs append-only |
-| **H4b** | Does a *trained* CLM HA beat the H2 HA (seed 0)? | HA only, on fixed records |
-| **H4c** | Does learning together beat a frozen HA? | DA and CLM HA, together |
+| **H4a** | Is the contrastive HA as good a diagnoser as the H2 HA, on the same records? | Heads only, on cached embeddings |
+| **H4b** | Does the baseline DA work as well with it as with the H2 HA? | None (evaluation) |
+| **H4c** | Does learning together (the heads keep updating) beat frozen heads, with a new DA? | DA + heads |
 
 ## 2. Why
 
-- **H2 and H3:** the HA sets the ceiling. With all tests, records reach 7,000 tokens, mostly
-  lab tables. A compact note of key findings and ruled-out diseases may let the HA reason
-  more reliably.
-- **H3 test results:** the DA's diagnosis trails the HA's last guess by 2.5–4 points.
-  Co-adaptation, meaning learning together, is a candidate fix. Separate adapters avoid the
-  interference seen with LA-CDM's shared adapter.
-- **The paper:** context editing beats fixed harnesses on long agentic tasks, and RL with
-  stepwise GRPO improves a 9B model's editing.
+- **H2:** a dedicated HA is the key to accuracy on partial records. A contrastive HA is a
+  cheaper, more direct "state → diagnosis" mapping, and its confidence comes straight from a
+  calibrated softmax.
+- **Learning together is cheap here.** Only the heads (a few million parameters) change, and
+  the 8-billion-parameter backbone stays frozen. Joint training costs almost nothing beyond a
+  normal DA run, and the heads cannot disturb the DA, unlike LA-CDM's shared adapter.
+- **H3:** with a frozen HA, a retrained DA matched accuracy at lower cost, but the HA never
+  adapted to the records the DA produces. H4c tests whether adapting helps.
 
-## 3. Stages (each gates the next)
+## 3. Design (`src/contrastive_ha/`)
 
-| Stage | What | GPU cost | Gate |
-|---|---|---|---|
-| **0. Learn** | `docs/CLM_PRIMER.md` | none | — |
-| **1. Measure context pressure** | From saved transcripts: the HA's context length per turn and its growth with tests | none (CPU) | Shows where editing could matter |
-| **2. H4a, out of the box** | The untrained Llama-3-8B as HA, **with** vs **without** editing. Test results are fed one at a time from the fixed H2 record sets. Evaluation only. | a few hours | Section 5 |
-| **3. H4b, train the CLM HA alone** | The DA is fixed: replay the fixed record sequences. The HA learns to edit (GRPO) and to diagnose from its own context (SFT). | ~1 day | Section 5 |
-| **4. H4c, learning together** | A new DA (GRPO) and the CLM HA from stage 3, trained together | ~2 days | — |
-
-**Independent side experiment (cheap):** the success-gated cost for the DA, below. It can run
-any time.
-
-## 4. Design
-
-### 4.1 What the CLM HA does at each turn
-
-1. **Context:** its context from the last turn + the new test result, appended by default.
-   On the first turn, the context is the instructions + the patient history.
-2. **The HA may edit** (D1). **Recommended:** it either does nothing (append-only) or emits a
-   `<rewrite>…</rewrite>` block that replaces its whole context with new text (its notes).
-   - The model decides **whether and when** to edit, as in the paper (Eq. 2).
-   - The rewrite is capped at about 400 tokens.
-3. **The hypothesis** is read from the resulting context by **four-way scoring**, as in H2:
-   the probability of each disease after "Hypothesis:".
-   - The confidence, the DA's transcript text and `ha_probs` for H3's machinery all stay the
-     same.
-   - Scoring, not generation, keeps the answer always valid.
-
-The DA's side is unchanged. It sees "The current hypothesis is: X (confidence: c)".
-
-### 4.2 Stage 2 (H4a): out-of-the-box comparison
-
-- **Same model** (the untrained Llama-3-8B) **and the same records**. The only difference is
-  that one arm may edit its context and the other only appends. This matches the paper's
-  "CLM vs base harness" comparison.
-- **Record sequences:** the "baseline DA's tests" and "all tests" sets from H2. Their results
-  are fed one per turn, in the order the DA ordered them; for "all tests", in a fixed random
-  order.
-- **Measures:**
-  - the accuracy of the final hypothesis;
-  - context tokens per turn;
-  - how often and how much it edits;
-  - a manual review of 20 notes for lost facts.
-
-### 4.3 Stage 3 (H4b): training the CLM HA alone
-
-- **Weights:** a new LoRA (r = 8) on Llama-3-8B (D2), separate from any DA adapter.
-- **Training signal, every step** (one patient, 4 rollouts of the HA over the same test
-  sequence):
-  - **Edits, by stepwise GRPO.**
-    - **Outcome:** 1 if the final hypothesis is correct.
-    - **Efficiency:** the paper's success-gated advantage on context tokens. Only correct
-      rollouts are ranked; shorter contexts gain.
-    - The advantage goes to every HA call in the rollout.
-  - **Diagnosis, by SFT:** cross-entropy on "Hypothesis: <true disease>" given the HA's own
-    context at every turn, as in H2. The HA learns to diagnose from its own notes.
-  - **A replay batch** of mixed-disease records in each SFT update, so updates from one
-    patient do not swing the HA (the attempt-3 lesson).
-- **Checkpoint:** chosen on validation (final-hypothesis accuracy), never on test.
-
-### 4.4 Stage 4 (H4c): learning together
-
-- Each step: DA rollouts with the **current** CLM HA, then a DA GRPO update, then the HA's
-  updates (section 4.3), all on that step's rollouts.
-- **Two separate adapters**, optimisers and learning rates. Neither update touches the other's
-  weights.
-- **DA settings:** as in H3a (original reward, 4 generations, 2,048-token transcripts), 700
-  steps (D4).
-- **Comparison arm:** H3a already exists (a DA trained against the frozen append-only H2 HA).
-  If budget allows, add a frozen-CLM-HA arm to separate "CLM" from "learning together".
-
-### 4.5 Engineering (D3)
-
-The HA now **generates** text (its rewrites), so it needs fast generation during training.
-- Today vLLM serves the DA by **merging** the DA's LoRA into the base weights, so an HA LoRA
-  cannot simply be added on top.
-- **Recommended:** serve both roles from vLLM as **separate LoRA requests** on the unchanged
-  base model.
-  - After each update, save each adapter (small) and point vLLM at the new copy, instead of
-    merging weights.
-  - This is new trainer code in a new file. The current trainer stays as it is.
-- **Fallback:** generate the HA's rewrites with Hugging Face `generate` on GPU 0. Simpler, but
-  probably 10–20 hours slower per run.
-
-### 4.6 Side experiment: success-gated test cost for the DA
-
-- **Change:** the DA's test-cost term only ranks **correct** rollouts within a group,
-  normalised as in the paper's Eq. 6. Wrong and invalid rollouts get no cost term, and groups
-  with fewer than 2 correct rollouts get none.
-- **Why:** it removes the "cheapest wrong answer wins" signal behind the drift to no tests and
-  H3b's gaming.
-- **Run:** one H3a-style run (frozen H2 HA, 700 steps). **Compare** with H3a, paired on test.
-- **Code:** a new reward class or an advantage hook, in a new file.
-
-## 5. Comparisons and decision rules (to be fixed with section 7)
-
-All tests are paired on the 240 test patients, with exact McNemar and paired-bootstrap 95%
-intervals.
-
-- **H4a (gate):** editing minus append-only, same untrained model, final-hypothesis
-  accuracy on the "all tests" sequences.
-  - If the CI lower bound is above −3 points, continue (editing is not harmful).
-  - Otherwise, stop, or revise the prompt once and rerun.
-- **H4b:** the trained CLM HA minus the H2 HA (seed 0), on the same record sets.
-  - If the CI lower bound is above −3 points, it is not worse: continue.
-  - If the CI is entirely above 0, it is better.
-- **H4c (primary):** the DA's diagnosis accuracy, joint minus H3a.
-  - A CI entirely above 0 means supported; a CI that includes 0 means no detectable gain; a
-    CI entirely below 0 means worse.
-  - **Secondary:** cost; the gap between the DA and the HA; calibration; context tokens.
-- **Side experiment:** the success-gated DA minus H3a, on accuracy and cost, with the same
-  three readings.
-
-## 6. Risks
-
-| Risk | Mitigation |
+| Choice | Value |
 |---|---|
-| Little context pressure in our episodes, so little room to gain | Stage 1 measures it first; stage 2 tests on the longest records |
-| Llama-3-8B edits poorly out of the box (the paper's weak-model result) | Expected. Stage 2 is a "does it break things" gate; stage 3 trains the editing |
-| Notes drop decisive facts (e.g. a lab value) | Manual review in stage 2; the SFT signal punishes notes that lose diagnostic information |
-| The engineering of two adapters in vLLM | A smoke test first; the Hugging Face `generate` fallback |
-| GPU memory: two trainable adapters on GPU 0 | Smoke test; the HA's updates use the same micro-batching as the DA |
-| One seed per arm | State it; repeat the primary arm if the result is close |
-| Data rules | Notes are written only by our local model; no MIMIC text goes to external APIs |
+| State text | The H2 HA prompt: chat template + `prompts/hypothesis_agent.txt` (history + test results) + `Hypothesis:`. These are the same tokens the H2 HA scores |
+| Action text | "Final diagnosis: <disease>", one per disease |
+| Pooling | The last token's final hidden state (4,096 numbers), as in CLM |
+| Backbones (frozen) | **base**: Llama-3-8B-Instruct, no adapter; **h2**: the same with the frozen H2 HA adapter (seed 0) |
+| Heads | One for states, one for actions: an input LayerNorm, an MLP of width 1,024 with 2 residual blocks, dropout 0.1, output 512, L2-normalised. About 7M parameters each; CLM's are 20M, trained on far more data |
+| Score | exp(logit scale) × cosine; the scale is learned (initial temperature 0.07, capped at 100) |
+| Loss | InfoNCE from the state side: cross-entropy of the true disease against the other three. CLM's reverse direction is left out, because with four actions it has many positives per action |
+| Training data | Exactly the H2 rows: every training patient as history only, all tests and 2 random subsets (seed 0, 7,000-token budget), 7,676 rows |
+| Validation | The H2 validation rows (seed 10,000, 1 random subset) |
+| Optimisation | AdamW, lr 3e-4, weight decay 0.01, batch 128, 30 epochs, cosine schedule, seed 0 |
+| Choice of epoch | Best validation accuracy (ties: lower validation loss); never on test |
+| Confidence | round(10 × top probability), as for the H2 HA; the DA's transcript format is unchanged |
 
-## 7a. Decisions as adopted (November 21, 2026) and implementation notes
+**Choice of backbone (fixed now): the higher validation accuracy of the chosen epochs** (ties:
+lower validation loss).
+- The h2 backbone's adapter was trained on exactly the training rows the heads are trained
+  on, so its training embeddings are "seen" data.
+- That can make its heads look better in training than on new data. This is why the choice is
+  made on validation, and the caveat is reported.
 
-The recommendations below were adopted (D1 a, D4 700 steps, D5 side experiment later, D6
-1/B + replay), with these changes found while implementing (`src/clm/`):
+## 4. Stages
 
-- **D3 changed to Hugging Face `generate`.** vLLM serves the DA by merging the DA's LoRA into
-  its weights, so an HA LoRA cannot be served next to it without rewriting the weight sync.
-  The HA's replies are short, so `generate` on the training GPU is used instead. The DA's
-  path is untouched.
-- **D2 is decided by stage 2.**
-  - Both the untrained model and the H2 HA are run as CLMs out of the box.
-  - Stage 3 starts from the H2 HA (`INIT=h2`) if its edit-mode accuracy on the "all tests"
-    sequences is not more than 3 points below its append-only accuracy. Otherwise it starts
-    from a fresh LoRA (`INIT=base`).
-  - The H2 HA already diagnoses well; a fresh LoRA would have to learn diagnosis from scratch
-    with the small SFT weight of D6.
-- **Stage 1 is folded into stage 2.** Every replay run reports context tokens per turn
-  (`summary.json`), and the append-only run is the measurement.
-- **Stage 2 arms:** A_da2, B_none, C_random2 and D_all, the same record sets as H2.
-- **Commands and output folders:** `docs/CLM_RUNBOOK.md`.
+| Stage | Jobs | GPU cost | Gate |
+|---|---|---|---|
+| **1a** | Embed every train, validation and test record with each backbone | ~2–4 h per backbone | — |
+| **1b** | Train the heads for each backbone; choose the backbone on validation; score test (H4a) | minutes | H4a rule |
+| **3** | The baseline DA (attempt 2, step 600) + the contrastive HA, test run (H4b) | ~1 h | none (informative) |
+| **4** | A new DA from scratch: **joint** arm (heads updated every step) and **frozen** arm (heads fixed), 700 steps each; validation every 100 steps; checkpoint chosen on validation; test run (H4c) | ~2 days per arm | — |
 
-## 7. Decisions needed before coding
+**Stage-4 details:**
+- **Each step:** after the DA's GRPO update, the heads take one AdamW step (lr 1e-4) on that
+  step's HA embeddings, labelled with the patient's disease, plus 32 mixed-disease H2 training
+  embeddings (replay).
+- **Saved:** the heads with every DA snapshot and checkpoint.
+- **DA settings:** as in H3a (original reward, 4 generations, 2,048-token transcripts, DA
+  phases only, lr 1e-5).
 
-- **D1: edit mechanism.**
-  - (a) Default append, plus an optional full rewrite **(recommended)**.
-  - (b) Structured edit commands (delete or replace a section), closer to the paper's shell
-    edits.
-  - (c) A forced rewrite every turn (MEM1-style, not a true CLM).
-- **D2: the HA's starting weights.**
-  - A new LoRA on base Llama **(recommended:** it keeps the ability to write notes).
-  - Start from the H2 HA adapter. It was trained only to answer "Hypothesis: X", so it may
-    have lost note-writing.
-- **D3: generation during training.**
-  - vLLM with both adapters as LoRA requests **(recommended)**.
-  - Hugging Face `generate` (simpler, slower).
-- **D4: the H4c length.** 700 steps (proposed).
-- **D6: the strength of the HA's SFT updates in stages 3–4.**
-  - **Background.** Attempt 2's HA-SFT step had a bug: only the longest row in each batch was
-    scored, at about 1/B strength. That made HA updates much weaker. Attempt 3, with the fix
-    (the paper's full-strength loss), scored 10 points lower. With one run each, the cause is
-    not established.
-  - **Why it matters here.** Each training step covers one patient, so full-strength SFT
-    updates all push toward one disease.
-  - **Recommended:** keep the correct loss (every row counts) and add both:
-    - a mixed-disease replay batch;
-    - an HA-SFT loss weight of about 1/B (B = HA records per step), so each step is roughly as
-      strong as attempt 2's.
+## 5. Comparisons and decision rules (fixed now)
 
-    This keeps the likely benefit of the bug without its arbitrary choice of row.
-  - **Alternatives:** full strength (the paper's), or a lower HA learning rate instead of a
-    loss weight.
-- **D5: order.**
-  - Run the cheap side experiment (success-gated DA cost) first, in parallel with stages 1–2
-    **(recommended)**.
-  - Or do CLM only.
+All tests are paired on the same 240 test patients, with exact McNemar and paired-bootstrap
+95% intervals (`scripts/test_stats.py`).
+
+- **H4a** (stage 1b, chosen backbone): contrastive HA minus H2 HA (`outputs/ha_sft/scores/new0`).
+  - **Primary record set:** A_da2 (the baseline DA's tests, the records the system produces).
+    - CI entirely above 0: better.
+    - Lower bound above −3 points: not worse (non-inferior).
+    - Otherwise: worse; stage 4 is then not run with this HA.
+  - **Secondary record sets:** B_none, C_random2, D_all.
+  - **Secondary measures:** ECE, AUROC.
+- **H4b** (stage 3): the baseline DA + contrastive HA minus the baseline DA + H2 HA (step 2),
+  on the DA's diagnosis. Informative only; no gate.
+- **H4c** (stage 4, primary): **joint minus frozen**, the DA's diagnosis accuracy at each
+  arm's validation-chosen step.
+  - CI entirely above 0: supported.
+  - CI includes 0: no detectable gain.
+  - CI entirely below 0: worse.
+  - **Secondary:** joint minus H3a (frozen H2 HA); cost; the gap between the DA and the HA's
+    last hypothesis; calibration.
+
+## 6. Risks and limitations
+
+- **The heads may overfit.** There are about 7,700 rows for about 15M parameters. Mitigated
+  by dropout, weight decay and choosing the epoch on validation.
+- **The h2 backbone saw the training rows** (section 3), which is why the choice is made on
+  validation.
+- **Long records:** the backbone reads the full prompt (up to 7,000 tokens, within Llama's
+  8,192), so nothing is cut. CLM's own default of 2,048 tokens does not apply here.
+- **One seed** for the heads and for each DA. Stage-4 arms are single runs.
+- **Ours vs theirs:** CLM's released heads (trained on Qwen3-8B embeddings, about 90M
+  examples) are not used, because we use our own Llama. So this tests the CLM *method*, not
+  their checkpoint.
+
+## 7. How to run
+
+See `docs/CONTRASTIVE_RUNBOOK.md`.
+
+## 8. Results (fill in)
+
+Run log:

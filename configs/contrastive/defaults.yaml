@@ -1,0 +1,11 @@
+# H4 stages 3-4 (docs/HYPOTHESIS_H4.md): the contrastive HA in the environment.
+# Not in the default config list: add it with "+contrastive=defaults" (slurm/contrastive_*.sbatch).
+backbone: base                                 # base | h2 (chosen in stage 1, on validation)
+h2_adapter_dir: outputs/ha_sft/seed_0/adapter  # used when backbone=h2
+heads_path: null                               # outputs/contrastive/heads/<backbone>/heads.pt
+update: true                                   # stage 4: false = frozen heads (comparison arm)
+learning_rate: 1.0e-4
+weight_decay: 0.01
+replay: 32                                     # mixed-disease H2 training records per update
+replay_path: null                              # outputs/contrastive/embeddings/<backbone>/train.pt
+updates_per_step: 1

@@ -1,8 +1,9 @@
 # Contrastive models: a primer for this project
 
-> **Superseded (November 21, 2026).** "CLM" in the meeting notes means a **Context Language
-> Model** (see `docs/CLM_PRIMER.md`), not a contrastive model. H4 is now built on that. This
-> file is kept as general background on contrastive models.
+> **This is the background for the current H4** (`docs/HYPOTHESIS_H4.md`). The meeting's
+> "CLM" is the **Contrastive Language Model** of Contrastive-LM/CLM; section 11 describes it and
+> our version. Sections 1–10 were written before the repo was identified; where they differ
+> from what was built (e.g. the encoder choice in sections 6–8), section 11 is what counts.
 
 A plain-language guide to contrastive models. Read it from top to bottom. Each idea builds
 on the one before.
@@ -173,3 +174,39 @@ plan).
 | Pooling | Combining per-token vectors into one |
 | Temperature scaling | Fitting τ on validation to calibrate the probabilities |
 | Replay batch | Stored past examples mixed into each update to keep it balanced |
+
+## 11. The Contrastive Language Model (Contrastive-LM/CLM) and our version
+
+**Their model** (Kwok et al., 2026; https://github.com/Contrastive-LM/CLM): a fast "System
+One" decision model.
+
+| Part | Theirs | Ours (`src/contrastive_ha/`) |
+|---|---|---|
+| State | The agent's situation as text | The HA prompt: the patient's history + test results so far |
+| Actions | Candidate actions as text | The four diseases ("Final diagnosis: <disease>") |
+| Backbone (frozen) | Qwen3-8B, served by vLLM in "pooling" mode | Our Llama-3-8B-Instruct, plain (`base`) or with the frozen H2 HA adapter (`h2`), run with Hugging Face |
+| Pooling | The last token | The last token, at "Hypothesis:", where the HA would name the disease |
+| Heads | 20M-parameter projection heads | About 7M each (we have about 7,700 training rows, not about 90M) |
+| Loss | InfoNCE, both directions | InfoNCE from the state side (true disease vs the other three) |
+| Decision | Highest dot product; softmax gives probabilities | The same: the hypothesis and the confidence |
+
+**Why the backbone stays frozen:** it is the expensive part. Each record is embedded **once**
+(stage 1a). Training the heads on the saved vectors then takes minutes. During joint training
+with the DA, only the small heads change.
+
+**What vLLM is:** a fast engine for *running* language models. It serves the DA during our
+training. The CLM repo uses it to compute embeddings. We do not need it for that: plain
+Hugging Face on the GPU that already holds our model does the job.
+
+**Why not their released heads:** they were trained on Qwen3-8B's vectors, so they only fit
+Qwen. Using our own Llama means training our own heads with their recipe.
+
+**The pipeline, end to end:**
+```
+patient history + tests  ──►  HA prompt  ──►  frozen Llama  ──►  last-token vector (4,096)
+                                                                   │  state head
+                                                                   ▼
+"Final diagnosis: appendicitis" … ──► frozen Llama ──► 4 vectors ──► action head
+                                                                   │
+                                     cosine × scale  ──►  softmax over 4 diseases  ──►  hypothesis + confidence
+```
