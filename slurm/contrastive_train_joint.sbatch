@@ -7,7 +7,7 @@
 #SBATCH --gres=gpu:l4:2
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=64G
+#SBATCH --mem=24G
 #SBATCH --time=24:00:00
 
 # H4 stage 4 (docs/HYPOTHESIS_H4.md): a new DA trained with the contrastive HA.

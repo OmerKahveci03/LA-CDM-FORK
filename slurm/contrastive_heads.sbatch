@@ -7,7 +7,7 @@
 #SBATCH --gres=gpu:l4:1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=32G
+#SBATCH --mem=16G
 #SBATCH --time=02:00:00
 
 # H4 stage 1b: train the contrastive heads on the cached embeddings, choose the epoch on

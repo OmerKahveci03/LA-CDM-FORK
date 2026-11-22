@@ -122,3 +122,58 @@ See `docs/CONTRASTIVE_RUNBOOK.md`.
 ## 8. Results (fill in)
 
 Run log:
+- 2026-11-21: smoke embedding (job 52225646) and smoke heads passed.
+- 2026-11-21: full embeddings for `base` and `h2` (about 1 h and 1.5 h); full heads for both.
+- 2026-11-21: H4a statistics (`jobs/contrastive_h4a_stats.sh`, B=h2) ->
+  `outputs/contrastive/stats/h4a_<arm>/`.
+
+### Stage 1b: backbone choice (validation only)
+
+| Backbone | Chosen epoch | Val accuracy | Val loss at epoch 30 | Train acc at epoch 30 |
+|---|---|---|---|---|
+| base | 21 | 0.800 | 0.709 | 0.917 |
+| **h2** | **2** | **0.869** | 0.981 | 0.983 |
+
+**Chosen: h2** (higher validation accuracy). It peaks at epoch 2 and then overfits: its
+embeddings already separate the diseases because the H2 adapter was fine-tuned on these
+training rows. The validation patients were not in that fine-tuning.
+
+Test accuracy of the heads alone (reference only, not used for the choice):
+
+| Backbone | A_da2 | B_none | C_random2 | D_all |
+|---|---|---|---|---|
+| base | 85.4% | 70.8% | 73.3% | 85.4% |
+| h2 | 89.2% | 77.1% | 80.0% | 90.8% |
+
+### H4a (A_da2, n = 240, contrastive HA on h2)
+
+| Run | Accuracy | ECE | Brier | AUROC (correct) |
+|---|---|---|---|---|
+| Contrastive HA (h2) | 89.2% [84.6, 92.5] | 6.3% [3.8, 10.0] | 0.073 | 0.883 |
+| H2 HA | 88.8% [84.1, 92.2] | 4.6% [2.7, 8.1] | 0.066 | 0.906 |
+| Baseline HA | 87.9% [83.2, 91.5] | 5.9% [3.6, 10.0] | 0.085 | 0.852 |
+
+- **Contrastive minus H2 HA: +0.4 points [−1.3, +2.1]** (3 vs 2 discordant; McNemar p = 1.0).
+- vs the baseline HA: +1.3 points [−2.5, +5.0] (p = 0.66).
+
+**Verdict (rule in section 5): non-inferior.** The interval includes 0, so the contrastive HA
+is not shown to be better, but its lower bound (−1.3) is above −3. Stage 4 goes ahead with
+this HA. The two HAs disagree on only 5 of 240 patients, which is expected: the heads read
+the same H2 adapter's representation. Calibration is slightly worse on the point estimates
+(ECE 6.3% vs 4.6%) with overlapping intervals.
+
+### Stage 4: validation curves (DA diagnosis accuracy, 240 patients × 4 attempts)
+
+Runs: joint job 52239537, frozen job 52239540 (20 h 19 min, peak RAM 7.9 GB); 700 steps each,
+36% of the training patients. No extension was registered before these curves were seen.
+
+| Step | 0 | 100 | 200 | 300 | 400 | 500 | 600 | 700 |
+|---|---|---|---|---|---|---|---|---|
+| joint | 4.6% | 37.3% | 54.6% | 62.5% | 55.7% | 70.8% | **73.6%** | 68.5% |
+| frozen | 4.6% | 39.4% | 59.7% | 52.6% | **70.0%** | 69.5% | 56.7% | 59.6% |
+
+**Chosen steps (validation only): joint 600, frozen 400.** The heads' online loss ended at
+0.05–0.06 (steps 699–700), so they did not drift.
+
+Secondary record sets (B_none, C_random2, D_all): see
+`outputs/contrastive/stats/h4a_<arm>/test_stats.md` (to be added).

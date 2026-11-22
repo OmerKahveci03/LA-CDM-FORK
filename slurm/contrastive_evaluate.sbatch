@@ -7,7 +7,7 @@
 #SBATCH --gres=gpu:l4:2
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=64G
+#SBATCH --mem=24G
 #SBATCH --time=06:00:00
 
 # H4 test runs (240 test patients) of a DA with the contrastive HA.
