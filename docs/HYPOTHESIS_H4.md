@@ -162,6 +162,21 @@ this HA. The two HAs disagree on only 5 of 240 patients, which is expected: the 
 the same H2 adapter's representation. Calibration is slightly worse on the point estimates
 (ECE 6.3% vs 4.6%) with overlapping intervals.
 
+### H4b (test, n = 240; baseline DA step 600, no retraining; `outputs/contrastive/stats/h4b_<score>/`)
+
+| HA with the baseline DA | DA accuracy | Tests | Cost | ECE | AUROC (correct) |
+|---|---|---|---|---|---|
+| Contrastive HA (h2) | 82.9% [77.6, 87.2] | 1.14 | $1,235 | 8.1% | 0.915 |
+| H2 HA (step 2) | 85.4% [80.4, 89.3] | 1.20 | $1,285 | 5.2% | 0.936 |
+| Baseline HA (baseline model) | 85.4% [80.4, 89.3] | 1.19 | $1,259 | 14.8% | 0.750 |
+
+- Contrastive − step 2: −2.5 points [−5.4, +0.4] (3 vs 9 discordant; p = 0.15); cost −$51
+  [−114, −1]. Contrastive − baseline model: −2.5 points [−6.2, +1.2].
+- Informative only (no gate). The DA was trained with the baseline HA's messages, so a new
+  HA changes what it reads; a small drop is expected and is not significant here.
+- Calibration is far better than the baseline HA's (ECE 8.1% vs 14.8%, AUROC 0.915 vs 0.750),
+  slightly worse than the H2 HA's.
+
 ### Stage 4: validation curves (DA diagnosis accuracy, 240 patients × 4 attempts)
 
 Runs: joint job 52239537, frozen job 52239540 (20 h 19 min, peak RAM 7.9 GB); 700 steps each,
@@ -174,6 +189,37 @@ Runs: joint job 52239537, frozen job 52239540 (20 h 19 min, peak RAM 7.9 GB); 70
 
 **Chosen steps (validation only): joint 600, frozen 400.** The heads' online loss ended at
 0.05–0.06 (steps 699–700), so they did not drift.
+
+### H4c (test, n = 240; `outputs/contrastive/stats/h4c_<score>/`)
+
+| Run (step) | DA accuracy | Class-mean acc | Macro F1 | Tests | Cost |
+|---|---|---|---|---|---|
+| Joint (600) | 84.2% [79.0, 88.2] | 81.3% | 81.1% | 1.39 | $1,189 |
+| Frozen (400) | 82.1% [76.7, 86.4] | 80.1% | 79.1% | 1.50 | $1,434 |
+| H3a, frozen H2 HA (700) | 85.8% [80.9, 89.7] | 84.8% | 82.2% | 1.27 | $1,025 |
+
+- **Primary, joint − frozen (DA diagnosis): +2.1 points [−2.5, +6.7]** (18 vs 13 discordant;
+  McNemar p = 0.47). **Verdict: no detectable gain** (the interval includes 0).
+- Cost, joint − frozen: −$245 [−336, −161], with −0.12 tests (p = 0.007). This is
+  confounded: the arms are at different steps (600 vs 400), so the difference can come from
+  the DA's training stage as well as from the heads.
+- Joint − H3a: −1.7 points [−5.4, +2.1]; cost +$164 [+95, +235].
+- HA final hypothesis, joint − frozen: −1.2 points [−5.0, +2.1]; joint − H3a −0.8 [−3.8, +2.1].
+- One run per arm; the validation curves move 5–13 points between checkpoints, which is as
+  large as the effects being tested.
+
+### H4c-ext: exploratory extension to 1,900 steps (registered 2026-11-23)
+
+**Exploratory, not pre-registered:** decided after the 700-step validation and test results
+above were seen. The 700-step H4c result stays the primary one.
+
+- Both arms (joint and frozen) resume from `checkpoint-700` to `MAX_STEPS=1900`: about all
+  of the training patients once (700 steps = 36%). 1,900 is a multiple of the validation
+  interval, so the last step is validated.
+- Each arm's step is chosen on validation over steps 100–1900 (ties: lower cost). The
+  700-step test runs are kept; new test runs go to `test_step_XXXX` as before.
+- Same comparisons as H4c (joint − frozen primary; vs H3a for reference only, since H3a
+  stopped at 700 steps).
 
 Secondary record sets (B_none, C_random2, D_all): see
 `outputs/contrastive/stats/h4a_<arm>/test_stats.md` (to be added).
