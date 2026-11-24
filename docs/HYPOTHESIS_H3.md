@@ -217,5 +217,18 @@ Run log:
       stable to 900 steps.
   - Both step-700 checkpoints come before the instability. The H3a adapter is from the
     uninterrupted first job; H3b's is the checkpoint its second job resumed from.
+  - **Correction (2026-11-23): the restarts *do* explain most of it.** H4's extension exposed a
+    resume bug (`src/utils/peft_resume.py`): with the frozen HA loaded as a second adapter, a
+    checkpoint stores it in a subfolder (`frozen_ha/`), and `transformers.Trainer` then reloads
+    only that subfolder and never the DA's root adapter. A resumed job therefore continues with
+    an untrained DA (optimizer and step restored). H4's training episodes show what that looks
+    like: invalid formats jump to about 90% right after the resume, then the DA relearns within
+    about 150 steps. So:
+    - H3a's collapse at step 900 (95.1% undiagnosed, 25 steps after resuming at 875) is the bug.
+    - H3b's step-800 dip (54%) and recovery at 900 is the bug plus relearning. The argument
+      above ("would not have recovered") was wrong.
+    - H3a's drift to 0.34 tests at step 800 happened inside its first job and is real.
+    - **The H3 results are unaffected:** both chosen step-700 adapters were saved before any
+      resume.
 - H3b orders more tests than H3a (1.95 vs 1.27 at step 700), but they are cheaper ($663 vs
   $954). Its accuracy on diagnosed cases is lower (76.0% vs 83.3%).

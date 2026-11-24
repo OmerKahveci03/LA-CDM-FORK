@@ -31,6 +31,7 @@ from src.train import (
 )
 from src.trainer.cdm_grpo_trainer import CDMGRPOTrainer
 from src.utils import episode_log
+from src.utils.peft_resume import RestoreAdapterCallback
 from src.utils.setup import (
     setup_wandb,
     load_model,
@@ -98,8 +99,10 @@ def main(cfg: DictConfig):
         episode_log_dir=str(episode_dir),
         eval_stage_name="val",
         # The heads update first, so DA snapshots and validation use the updated heads.
-        callbacks=[heads_callback, AdapterSnapshotCallback(output_dir, cycle_steps), FinalEvaluationCallback(),
-                   collapse_guard],
+        # RestoreAdapterCallback first: the Trainer's own resume skips the DA adapter when the
+        # checkpoint also holds the backbone adapter (src/utils/peft_resume.py).
+        callbacks=[RestoreAdapterCallback(cfg.training.resume_from_checkpoint), heads_callback,
+                   AdapterSnapshotCallback(output_dir, cycle_steps), FinalEvaluationCallback(), collapse_guard],
     )
 
     trainer.train(resume_from_checkpoint=cfg.training.resume_from_checkpoint)

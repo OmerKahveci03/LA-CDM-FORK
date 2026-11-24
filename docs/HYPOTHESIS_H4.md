@@ -224,6 +224,14 @@ above were seen. The 700-step H4c result stays the primary one.
   700-step test runs are kept; new test runs go to `test_step_XXXX` as before.
 - Same comparisons as H4c (joint − frozen primary; vs H3a for reference only, since H3a
   stopped at 700 steps).
+- **First attempt invalid (2026-11-23).** Resuming from `checkpoint-700` silently reset the DA
+  to an untrained adapter: `transformers.Trainer` reloads only the backbone adapter stored in
+  the checkpoint's `contrastive_backbone/` subfolder, not the DA's root adapter. Training
+  episodes went from about 15% to about 90% invalid formats immediately after step 700 in both
+  arms (`figures/h4/h4_end_reasons`). Fixed by `src/utils/peft_resume.py`
+  (`RestoreAdapterCallback`, logs `[resume] restored adapter 'default' ...`); the outputs after
+  step 700 were moved to `train/broken_resume_after_700/` and the extension rerun from
+  `checkpoint-700`. The 700-step H4c results ran without a resume and are unaffected.
 
 Secondary record sets (B_none, C_random2, D_all): see
 `outputs/contrastive/stats/h4a_<arm>/test_stats.md` (to be added).
