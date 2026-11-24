@@ -231,7 +231,11 @@ above were seen. The 700-step H4c result stays the primary one.
   arms (`figures/h4/h4_end_reasons`). Fixed by `src/utils/peft_resume.py`
   (`RestoreAdapterCallback`, logs `[resume] restored adapter 'default' ...`); the outputs after
   step 700 were moved to `train/broken_resume_after_700/` and the extension rerun from
-  `checkpoint-700`. The 700-step H4c results ran without a resume and are unaffected.
+  step 700. `save_total_limit: 5` had deleted the original `checkpoint-700`, so it was rebuilt
+  from the `adapters/step_0700` snapshot (`scripts/rebuild_checkpoint.py`; `REBUILT.json` in
+  the folder): same DA adapter, heads and data position, but **the AdamW moments of the DA
+  and of the heads restart fresh at step 700**. The 700-step H4c results ran without a resume
+  and are unaffected.
 
 Secondary record sets (B_none, C_random2, D_all): see
 `outputs/contrastive/stats/h4a_<arm>/test_stats.md` (to be added).

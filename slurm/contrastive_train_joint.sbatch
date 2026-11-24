@@ -93,6 +93,12 @@ fi
 
 CHECKPOINT=$("$PYTHON_BIN" scripts/find_latest_training_checkpoint.py "$TRAIN_DIR" \
     --max-steps "$MAX_STEPS" --pattern 'checkpoint-*')
+# A rebuilt checkpoint (scripts/rebuild_checkpoint.py) has no optimizer.pt, so the search above
+# skips it; RESUME_CHECKPOINT is used only while no complete checkpoint exists.
+if [[ -z "$CHECKPOINT" && -n "${RESUME_CHECKPOINT:-}" ]]; then
+    [[ -f "$RESUME_CHECKPOINT/trainer_state.json" ]] || { echo "No trainer_state.json in $RESUME_CHECKPOINT" >&2; exit 2; }
+    CHECKPOINT="$RESUME_CHECKPOINT"
+fi
 RESUME_ARGS=()
 if [[ -n "$CHECKPOINT" ]]; then
     RESUME_ARGS+=("training.resume_from_checkpoint=$CHECKPOINT")
