@@ -45,6 +45,11 @@ CON = "outputs/contrastive"
 TRAIN_RUNS = [("Heads learning (joint)", f"{CON}/joint/joint_h2/train"),
               ("Heads frozen", f"{CON}/joint/frozen_h2/train")]
 PREREGISTERED_STEPS = 700
+MAX_STEP: int | None = None  # --max-step: plot training curves only up to this step
+
+
+def upto(points: list[dict]) -> list[dict]:
+    return [p for p in points if MAX_STEP is None or p["step"] <= MAX_STEP]
 VALIDATION_PANELS = [
     ("accuracy", "DA accuracy (undiagnosed counted wrong)", "pct"),
     ("undiagnosed", "Undiagnosed share", "pct"),
@@ -54,7 +59,7 @@ VALIDATION_PANELS = [
     ("cost_usd", "Average test cost per case (USD)", "money"),
 ]
 HA_RECORD_SETS = [("A_da2", "Baseline DA's tests"), ("B_none", "No tests"),
-                  ("C_random2", "2 random tests"), ("D_all", "All tests")]
+                  ("C_random2", "Random tests, same number"), ("D_all", "All tests")]
 HA_RUNS = [  # (label, folder holding <record set>/test_episodes.csv)
     ("CLM HA (h2 backbone)", f"{CON}/scores/h2"),
     ("CLM HA (plain Llama)", f"{CON}/scores/base"),
@@ -99,7 +104,7 @@ def plot_heads(out_dir: Path) -> None:
         for line in updates_path.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 updates.append(json.loads(line))
-        updates = sorted({u["step"]: u for u in updates}.values(), key=lambda u: u["step"])  # resumes repeat steps
+        updates = upto(sorted({u["step"]: u for u in updates}.values(), key=lambda u: u["step"]))  # resumes repeat steps
     if not curves and not updates:
         print("  skipped h4_heads: no heads/<backbone>/curve.csv and no heads update log")
         return
@@ -200,7 +205,7 @@ def plot_validation(out_dir: Path, chosen: dict[str, int]) -> None:
     from matplotlib.ticker import MultipleLocator
 
     runs = {name: load_validation(Path(path), 100) for name, path in TRAIN_RUNS if Path(path).is_dir()}
-    runs = {name: pts for name, pts in runs.items() if pts}
+    runs = {name: upto(pts) for name, pts in runs.items() if upto(pts)}
     if not runs:
         print("  skipped h4_validation: no validation summaries")
         return
@@ -282,9 +287,9 @@ def plot_end_reasons(out_dir: Path, bin_steps: int = 25) -> None:
     points = []
     max_step = 0
     for col, (name, train_dir) in enumerate(runs):
-        for row, (label, series) in enumerate((("validation, every 100 steps", val_end_shares(train_dir)),
+        for row, (label, series) in enumerate((("validation, every 100 steps", upto(val_end_shares(train_dir))),
                                                (f"training, per {bin_steps} steps",
-                                                train_end_shares(train_dir, bin_steps)))):
+                                                upto(train_end_shares(train_dir, bin_steps))))):
             ax = axes[row][col]
             base_style(ax, f"{name}: how episodes end ({label})")
             if not series:
@@ -420,7 +425,10 @@ def main() -> None:
     parser.add_argument("--bootstrap", type=int, default=2000)
     parser.add_argument("--joint-step", type=int, default=600, help="joint arm's validation-chosen step")
     parser.add_argument("--frozen-step", type=int, default=400, help="frozen arm's validation-chosen step")
+    parser.add_argument("--max-step", type=int, default=0, help="plot training curves up to this step (0: all)")
     args = parser.parse_args()
+    global MAX_STEP
+    MAX_STEP = args.max_step or None
     import matplotlib
 
     matplotlib.use("Agg")

@@ -3,6 +3,9 @@
 Every job for H4 (`docs/HYPOTHESIS_H4.md`), in order, with where its output goes. Background:
 `docs/CONTRASTIVE_PRIMER.md`.
 
+> **In progress (2026-11-23):** the 1,900-step extension is being restarted after a resume
+> bug. Current state and next commands: **`docs/H4_EXTENSION_RESTART.md`**.
+
 All output is under **`outputs/contrastive/`**. Nothing else is written or changed.
 
 ```
