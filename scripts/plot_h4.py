@@ -61,8 +61,8 @@ VALIDATION_PANELS = [
 HA_RECORD_SETS = [("A_da2", "Baseline DA's tests"), ("B_none", "No tests"),
                   ("C_random2", "Random tests, same number"), ("D_all", "All tests")]
 HA_RUNS = [  # (label, folder holding <record set>/test_episodes.csv)
-    ("CLM HA (h2 backbone)", f"{CON}/scores/h2"),
-    ("CLM HA (plain Llama)", f"{CON}/scores/base"),
+    ("CLM HA, fine-tuned (chosen)", f"{CON}/scores/h2"),
+    ("CLM HA, plain Llama", f"{CON}/scores/base"),
     ("Separately fine-tuned HA (H2)", "outputs/ha_sft/scores/new0"),
     ("Baseline HA (jointly trained)", "outputs/ha_sft/scores/old2"),
 ]
@@ -195,7 +195,7 @@ def plot_ha_test(out_dir: Path) -> None:
     ax.set_ylim(0, 1.08)
     ax.legend(loc="center left", bbox_to_anchor=(1.01, 0.5), frameon=False, fontsize=7, labelcolor=INK_2)
     save(fig, out_dir / "h4_ha_test", note="Error bars: 95% Wilson intervals. Same patients and records "
-         "for every HA within a group. Primary H4a comparison: A_da2, CLM (h2) vs separately fine-tuned HA.")
+         "for every HA within a group. Primary H4a comparison: A_da2, CLM (fine-tuned) vs separately fine-tuned HA.")
     write_points(out_dir / "h4_ha_test_points.csv", points)
 
 

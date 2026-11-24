@@ -119,13 +119,13 @@ bound is above $-$3 points. If it were worse, H4c would not be run with it.
   \small
   \begin{tabular}{lrrrrr}
     \toprule
-    HA & No tests & Random tests & Baseline DA's tests & All tests & ECE \\
+    HA & No tests & Random & Baseline DA's & All tests & ECE \\
     \midrule
     Untrained model (zero-shot) & 61.3\% & 63.3\% & 82.5\% & 75.4\% & 10.8\% \\
     Baseline HA (shared adapter) & 63.3\% & 64.6\% & 87.9\% & 87.9\% & 5.6\% \\
     Separately fine-tuned HA & 78.3\% & 80.8\% & 88.8\% & 90.0\% & 4.5\% \\
     CLM HA, plain Llama & 70.8\% & 73.3\% & 85.4\% & 85.4\% & 6.8\% \\
-    CLM HA, fine-tuned adapter (chosen) & 77.1\% & 80.0\% & 89.2\% & 90.8\% & 4.9\% \\
+    CLM HA, fine-tuned (chosen) & 77.1\% & 80.0\% & 89.2\% & 90.8\% & 4.9\% \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -154,12 +154,15 @@ with no fine-tuning of the language model at all.
 
 \begin{table}[ht]
   \centering
-  \caption{H4b: the baseline DA (no retraining) with three different HAs.}
+  \caption{H4b: the baseline DA (no retraining) with three different HAs.
+  ``DA'' is the accuracy of the DA's diagnosis, ``HA'' that of the HA's last
+  hypothesis; cost is per case; AUROC measures how well the HA's confidence
+  separates its correct from its wrong hypotheses.}
   \label{tab:h4b}
   \small
   \begin{tabular}{lrrrrr}
     \toprule
-    HA next to the baseline DA & DA's diagnosis & HA's last hypothesis & Cost per case & ECE & AUROC \\
+    HA next to the baseline DA & DA & HA & Cost & ECE & AUROC \\
     \midrule
     Baseline HA (baseline model) & 85.4\% & 87.1\% & \$1,259 & 14.8\% & 0.750 \\
     Separately fine-tuned HA & 85.4\% & 89.2\% & \$1,285 & 5.2\% & 0.936 \\
@@ -205,16 +208,19 @@ for frozen (70.0\%). During training the heads' online loss stayed low (about
 
 \begin{table}[ht]
   \centering
-  \caption{H4c test results (240 cases), with H3a for reference.}
+  \caption{H4c test results (240 cases), with H3a for reference. ``DA'' is the
+  accuracy of the DA's diagnosis, ``HA'' that of the HA's last hypothesis; tests
+  and cost are per case. H3a is the retrained DA with the separately fine-tuned
+  HA.}
   \label{tab:h4c}
   \small
   \begin{tabular}{lrrrr}
     \toprule
-    System (chosen step) & DA's diagnosis & HA's last hypothesis & Tests per case & Cost per case \\
+    System (chosen step) & DA & HA & Tests & Cost \\
     \midrule
     New DA + CLM HA, joint (600) & 84.2\% & 87.5\% & 1.39 & \$1,189 \\
     New DA + CLM HA, frozen (400) & 82.1\% & 88.8\% & 1.50 & \$1,434 \\
-    H3a: retrained DA + separately fine-tuned HA (700) & 85.8\% & 88.3\% & 1.27 & \$1,025 \\
+    H3a (700) & 85.8\% & 88.3\% & 1.27 & \$1,025 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -275,7 +281,7 @@ was saved before any resume.
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=\textwidth]{h4_end_reasons_resume_bug.png}
+  \includegraphics[width=\textwidth]{h4_end_reasons.png}
   \caption{How episodes ended in the first, invalid extension run. The dashed
   line marks step 700, where the job resumed with the untrained DA.}
   \label{fig:bug}

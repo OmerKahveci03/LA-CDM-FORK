@@ -38,8 +38,14 @@ the free rule already does, and H3b showed that rewards built on the HA's output
 reward for *correctly overriding* is mostly already in the diagnosis reward; any extra term
 must be capped so it cannot dominate the diagnosis reward.
 
-## 2. Ablation: DA without an HA
+## 2. Ablation: DA without an HA ("how does the DA perform on its own?")
 
+**2a (cheap, no training):** run an existing DA (the baseline DA, and H3a's DA) on the test
+set with the HA's messages removed from its transcript. That needs one GPU evaluation job per
+DA and a "no HA" switch in the environment. It shows how much these DAs *rely* on the HA, but a
+DA trained with an HA may simply be confused without one, so it understates a DA trained alone.
+
+**2b (the real ablation):**
 We have never tested whether the HA helps the DA. Train a DA exactly like H3a (same reward,
 700 steps, validation-chosen step) but with no hypothesis in its transcript, and compare it
 with H3a on the 240 test patients. This needs a "no HA" switch in the environment and about
@@ -57,7 +63,32 @@ one GPU day. It tells whether the HA's value is in advising the DA or in making 
   sparse rewards.
 - About one day to build. Compare with H3a.
 
-## 4. Smaller items
+## 4. The DA reads the HA's full probability distribution (idea from Jev, run locally)
+
+**Origin (November 24, 2026):** TypeSafe AI's **Jev** ("System One" decision model, via Vercel's AI
+Gateway; https://typesafe.ai/blog/introducing-system-one-models-and-jev) takes a state plus typed
+questions and returns a choice, a probability for every option, and a confidence, without
+generating text. The idea was to use Jev as the HA and train a DA on its output.
+
+**Jev itself is not allowed:** it is an external API, and MIMIC records must not be sent to third
+parties under the PhysioNet data use agreement. TypeSafe states no data-handling terms, and the
+model cannot be self-hosted. Only revisit this with written approval (professor and PhysioNet), or
+on non-MIMIC data.
+
+**The local version (no data leaves HiPerGator):** our HAs already compute all four
+probabilities and pass on only the top one.
+- Change the HA's message from "Hypothesis: appendicitis (confidence 0.62)" to the full
+  distribution, for example "appendicitis 0.62, cholecystitis 0.25, pancreatitis 0.10,
+  diverticulitis 0.03".
+- Train a DA exactly like H3a (frozen separately fine-tuned HA, 700 steps, step chosen on
+  validation) and compare it with H3a on the 240 test patients. The CLM HA could be used the same way.
+- Question: does seeing the runner-up diagnoses help the DA choose tests, or override the HA less often?
+- Needs a new message format (a new environment option, kept separate from the old code), a
+  pre-registered decision rule, and about one GPU day.
+- Related work: Jev can be cited as an industry example of "state → calibrated choice over typed
+  options", but without its (vendor-reported, unverified) performance numbers.
+
+## 5. Smaller items
 
 - CLM heads learned *from scratch* jointly with the DA (closest to the paper's joint design;
   H4c started from pre-trained heads).
