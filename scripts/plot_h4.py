@@ -58,8 +58,8 @@ HA_RECORD_SETS = [("A_da2", "Baseline DA's tests"), ("B_none", "No tests"),
 HA_RUNS = [  # (label, folder holding <record set>/test_episodes.csv)
     ("CLM HA (h2 backbone)", f"{CON}/scores/h2"),
     ("CLM HA (plain Llama)", f"{CON}/scores/base"),
-    ("New HA (H2)", "outputs/ha_sft/scores/new0"),
-    ("Baseline HA", "outputs/ha_sft/scores/old2"),
+    ("Separately fine-tuned HA (H2)", "outputs/ha_sft/scores/new0"),
+    ("Baseline HA (jointly trained)", "outputs/ha_sft/scores/old2"),
 ]
 
 
@@ -67,9 +67,9 @@ def test_runs(joint_step: int, frozen_step: int) -> list[tuple[str, str]]:
     """Fixed order, so each run keeps its colour in every test figure."""
     return [
         ("Baseline model", f"{R1}/test_step_0600"),
-        ("Baseline DA + new HA", f"{R1}/frozen_ha_seed0_step_0600"),
+        ("Baseline DA + separately fine-tuned HA", f"{R1}/frozen_ha_seed0_step_0600"),
         ("Baseline DA + CLM HA (H4b)", f"{CON}/combined/h2"),
-        ("Retrained DA + new HA (H3a)", "outputs/h3/h3a_ha0/frozen_ha_seed0_step_0700"),
+        ("Retrained DA + separately fine-tuned HA (H3a)", "outputs/h3/h3a_ha0/frozen_ha_seed0_step_0700"),
         (f"New DA + CLM HA, heads learning (step {joint_step})",
          f"{CON}/joint/joint_h2/test_step_{joint_step:04d}"),
         (f"New DA + CLM HA, heads frozen (step {frozen_step})",
@@ -79,7 +79,8 @@ def test_runs(joint_step: int, frozen_step: int) -> list[tuple[str, str]]:
 
 def short(label: str) -> str:
     """Multi-line tick label."""
-    return label.replace(" + ", "\n+ ").replace(", ", ",\n").replace(" (", "\n(")
+    return (label.replace(" + ", "\n+ ").replace("separately ", "separately\n")
+            .replace(", ", ",\n").replace(" (", "\n("))
 
 
 def read_csv(path: Path) -> list[dict]:
@@ -147,7 +148,7 @@ def plot_heads(out_dir: Path) -> None:
         points += [{"figure": "online", "step": u["step"], "loss": u["loss_first"],
                     "online_rows": u.get("online_rows"), "rows": u.get("rows")} for u in updates]
     save(fig, out_dir / "h4_heads",
-         note="Left: the chosen epoch maximises validation accuracy. Right: loss on that step's new HA "
+         note="Left: the chosen epoch maximises validation accuracy. Right: loss on that step's fresh HA "
               "records plus 32 replay rows, before the update (cross-entropy over the 4 diseases).")
     write_points(out_dir / "h4_heads_points.csv", points)
 
@@ -189,7 +190,7 @@ def plot_ha_test(out_dir: Path) -> None:
     ax.set_ylim(0, 1.08)
     ax.legend(loc="center left", bbox_to_anchor=(1.01, 0.5), frameon=False, fontsize=7, labelcolor=INK_2)
     save(fig, out_dir / "h4_ha_test", note="Error bars: 95% Wilson intervals. Same patients and records "
-         "for every HA within a group. Primary H4a comparison: A_da2, CLM (h2) vs new HA.")
+         "for every HA within a group. Primary H4a comparison: A_da2, CLM (h2) vs separately fine-tuned HA.")
     write_points(out_dir / "h4_ha_test_points.csv", points)
 
 
@@ -237,6 +238,74 @@ def plot_validation(out_dir: Path, chosen: dict[str, int]) -> None:
     write_points(out_dir / "h4_validation_points.csv",
                  [{"run": name, "step": p["step"], **{k: p.get(k) for k, _, _ in VALIDATION_PANELS}}
                   for name, pts in runs.items() for p in pts])
+
+
+# ------------------------------------------------------------ why episodes end
+
+END_REASONS = [("diagnosis", "Diagnosis given", SERIES[2]), ("invalid_format", "Invalid action format", SERIES[1]),
+               ("max_length", "Transcript too long", SERIES[3]), ("max_steps", "Turn limit reached", SERIES[6])]
+
+
+def train_end_shares(train_dir: Path, bin_steps: int) -> list[dict]:
+    path = train_dir / "episodes" / "train_episodes.csv"
+    if not path.is_file():
+        return []
+    latest = {}
+    for r in read_rows(path):  # a resumed job may repeat steps; keep the last copy of each episode
+        if r["step"] is not None:
+            latest[(r["step"], r["patient_id"], r["episode"])] = r
+    bins = {}
+    for r in latest.values():
+        bins.setdefault((r["step"] - 1) // bin_steps, []).append(r["end_reason"])
+    return [{"step": (b + 1) * bin_steps, "n": len(reasons),
+             **{key: reasons.count(key) / len(reasons) for key, _, _ in END_REASONS}}
+            for b, reasons in sorted(bins.items())]
+
+
+def val_end_shares(train_dir: Path) -> list[dict]:
+    points = []
+    for p in load_validation(train_dir, 100):
+        shares = {key: p.get(key) or 0.0 for key in ("invalid_format", "max_length", "max_steps")}
+        points.append({"step": p["step"], "diagnosis": max(0.0, 1 - sum(shares.values())), **shares})
+    return points
+
+
+def plot_end_reasons(out_dir: Path, bin_steps: int = 25) -> None:
+    runs = [(name, Path(path)) for name, path in TRAIN_RUNS if Path(path).is_dir()]
+    if not runs:
+        print("  skipped h4_end_reasons: no training runs")
+        return
+    from matplotlib.patches import Patch
+    from matplotlib.ticker import MultipleLocator
+
+    fig, axes = new_figure(2, len(runs), 5.6, 3.0)
+    points = []
+    max_step = 0
+    for col, (name, train_dir) in enumerate(runs):
+        for row, (label, series) in enumerate((("validation, every 100 steps", val_end_shares(train_dir)),
+                                               (f"training, per {bin_steps} steps",
+                                                train_end_shares(train_dir, bin_steps)))):
+            ax = axes[row][col]
+            base_style(ax, f"{name}: how episodes end ({label})")
+            if not series:
+                ax.text(0.5, 0.5, "no data", transform=ax.transAxes, ha="center", color=MUTED)
+                continue
+            xs = [p["step"] for p in series]
+            max_step = max(max_step, max(xs))
+            ax.stackplot(xs, *[[p[key] for p in series] for key, _, _ in END_REASONS],
+                         colors=[c for _, _, c in END_REASONS], linewidth=0, zorder=3)
+            ax.axvline(PREREGISTERED_STEPS, color=INK_2, linewidth=1.0, linestyle=(0, (4, 3)), zorder=4)
+            y_format(ax, "pct", 1)
+            points += [{"run": name, "source": label.split(",")[0], **p} for p in series]
+    for ax in axes.flat:
+        ax.set_xlim(0, max(max_step, 1))
+        ax.xaxis.set_major_locator(MultipleLocator(100 if max_step <= 1000 else 200))
+    fig.legend(handles=[Patch(color=c, label=text) for _, text, c in END_REASONS], loc="upper right",
+               ncol=len(END_REASONS), frameon=False, fontsize=8, labelcolor=INK_2)
+    save(fig, out_dir / "h4_end_reasons", title="Why episodes end (share of episodes)",
+         note=f"Undiagnosed = every reason except a diagnosis. Dashed line: step {PREREGISTERED_STEPS}, where "
+              "the pre-registered run ended and the extension resumed.")
+    write_points(out_dir / "h4_end_reasons_points.csv", points)
 
 
 # ------------------------------------------------------------ H4b and H4c test runs
@@ -359,8 +428,9 @@ def main() -> None:
     plot_heads(args.out_dir)
     plot_ha_test(args.out_dir)
     plot_validation(args.out_dir, {TRAIN_RUNS[0][0]: args.joint_step, TRAIN_RUNS[1][0]: args.frozen_step})
+    plot_end_reasons(args.out_dir)
     plot_test(args.out_dir, args.bootstrap, test_runs(args.joint_step, args.frozen_step))
-    print(f"Wrote to {args.out_dir}/: h4_heads, h4_ha_test, h4_validation, h4_test_overview, h4_test_rates, "
+    print(f"Wrote to {args.out_dir}/: h4_heads, h4_ha_test, h4_validation, h4_end_reasons, h4_test_overview, h4_test_rates, "
           "h4_test_confusion, h4_cost_vs_accuracy")
 
 

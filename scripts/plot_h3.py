@@ -1,4 +1,4 @@
-"""Figures for H3 (docs/HYPOTHESIS_H3.md): the DA retrained against the frozen new HA.
+"""Figures for H3 (docs/HYPOTHESIS_H3.md): the DA retrained against the frozen separately fine-tuned HA.
 
     python scripts/plot_h3.py                       # defaults below; writes figures/h3/
 
@@ -35,7 +35,7 @@ from src.utils.episode_log import DISEASES, read_rows  # noqa: E402
 R1 = "outputs/cost_sweep/cost_1_attempt2"
 TEST_RUNS = [  # (label, test folder); fixed order, so each run keeps its color in every figure
     ("Baseline model", f"{R1}/test_step_0600"),
-    ("Baseline DA + new HA", f"{R1}/frozen_ha_seed0_step_0600"),
+    ("Baseline DA + separately fine-tuned HA", f"{R1}/frozen_ha_seed0_step_0600"),
     ("Retrained DA (H3a)", "outputs/h3/h3a_ha0/frozen_ha_seed0_step_0700"),
     ("Retrained DA + belief reward (H3b)", "outputs/h3/h3b_ha0/frozen_ha_seed0_step_0700"),
 ]
@@ -51,7 +51,7 @@ VALIDATION_PANELS = [
 
 def short(label: str) -> str:
     """Two-line tick label."""
-    return label.replace(" + ", "\n+ ").replace(" (", "\n(")
+    return label.replace(" + ", "\n+ ").replace("separately ", "separately\n").replace(" (", "\n(")
 
 
 def plot_validation(out_dir: Path) -> None:
@@ -84,7 +84,7 @@ def plot_validation(out_dir: Path) -> None:
     handles, labels = axes.flat[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper right", ncol=len(runs), frameon=False, fontsize=8, labelcolor=INK_2)
     save(fig, out_dir / "h3_validation", title="H3 validation (240 cases x 4 sampled rollouts, every 100 steps)",
-         note="Every step trains the Decision Agent; the new HA is frozen. H3a was stopped by the collapse "
+         note="Every step trains the Decision Agent; the separately fine-tuned HA is frozen. H3a was stopped by the collapse "
               "guard at step 900.")
     write_points(out_dir / "h3_validation_points.csv",
                  [{"run": name, "step": p["step"], **{k: p.get(k) for k, _, _ in VALIDATION_PANELS}}

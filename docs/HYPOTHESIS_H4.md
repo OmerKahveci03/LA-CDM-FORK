@@ -11,6 +11,10 @@ go in section 8.
 - **Background:** `docs/CONTRASTIVE_PRIMER.md`.
 - **Commands and outputs:** `docs/CONTRASTIVE_RUNBOOK.md`.
 - **Code:** `src/contrastive_ha/`.
+- **Names (added 2026-11-23, after the results):** the *separately fine-tuned HA* is the H2 HA
+  (fine-tuned on its own before DA training, then frozen; earlier "new HA"); the *baseline HA*
+  is the one trained jointly with the DA in the shared adapter; the *CLM HA* (contrastive HA)
+  is the frozen Llama + separately fine-tuned adapter with contrastive heads.
 - **An earlier plan** that read "CLM" as a *context-editing* model is kept as an alternative
   (`docs/HYPOTHESIS_H4_CONTEXT_EDITING.md`, `src/clm/`). It has not been run.
 
