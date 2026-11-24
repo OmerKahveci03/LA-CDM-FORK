@@ -93,7 +93,9 @@ CLM HA does this by comparing vectors instead of generating text:
 
 I tried two frozen backbones: plain Llama, and Llama with the separately
 fine-tuned HA's adapter. The heads were trained on the same 7,676 training
-records as the separately fine-tuned HA (several views per patient). The
+records as the separately fine-tuned HA: up to four distinct views of each
+training patient (history only, all tests, and two random subsets of tests),
+and 720 validation records. The
 adapter backbone reached 86.9\% validation accuracy (best epoch 2), against
 80.0\% for plain Llama (epoch 21), so it was chosen. Contrastive-LM trains its
 heads on a Qwen model with about 90 million examples, so I did not use their
