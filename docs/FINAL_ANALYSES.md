@@ -141,7 +141,78 @@ Still to do once the GPU evaluations finish: `jobs/final_a4_stats.sh`, and rerun
   tests pass. 52771471 (A4b) was unaffected.
 - Resubmitted: 52774123 (unit tests) → 52774124 (A4a baseline DA, HA hidden), 52774125 (A4a H3a
   DA, HA hidden), 52774126 (A1), 52774127 (A2 + A3).
+- 52774124/52774125 (A4a) **failed** at start-up: the entry point reused `evaluate_frozen_ha`'s
+  decorated `main`, so Hydra resolved `configs/` from the wrong module. Fixed:
+  `src/evaluate_hidden_ha.py` now has its own `@hydra.main` and calls the original function. The
+  failed output folders (logs only) were deleted. Rerun with a smoke gate: 52776115 (smoke,
+  2 patients) → 52776116 (baseline DA) and 52776117 (H3a DA).
 - 52773930: A5 (`jobs/final_vs_baseline_stats.sh`). 52774073: H4c-ext statistics
   (`jobs/contrastive_h4c_ext_stats.sh`, frozen step 1100 test finished).
 
-(results to be filled in)
+### Results (November 25, 2026)
+
+**A1, deferral rules (MIMIC test; `outputs/final_analyses/a1_disagreement.md`).**
+
+| System | DA | HA final | overrode correct HA / corrected wrong HA | defer: acc (wins/losses), Holm p |
+|---|---|---|---|---|
+| baseline | 85.4 | 87.1 | 7 / 7 | 87.1 (+11/−7), 0.48 |
+| step2 | 85.4 | 89.2 | 12 / 5 | 89.2 (+14/−5), 0.25 |
+| h3a | 85.8 | 88.3 | 8 / 2 | 88.3 (+8/−2), 0.25 |
+| h3b | 74.6 | 78.3 | 14 / 5 | 78.3 (+14/−5), 0.25 |
+| h4b | 82.9 | 88.8 | 16 / 6 | 88.8 (+20/−6), 0.056 |
+| h4c_joint | 84.2 | 87.5 | 9 / 1 | 87.5 (+9/−1), 0.11 |
+| h4c_frozen | 82.1 | 88.8 | 17 / 2 | **88.8 (+18/−2), 0.003** |
+
+- **Verdict:** "defer" is supported (Holm < 0.05) for h4c_frozen only. In every system it is
+  ahead of the DA (+1.7 to +6.7 points) and never behind.
+- **Threshold rule:** t was chosen on validation (baseline 6, h3a 4, h3b 5, h4c_frozen 4) and gave
+  the same test result as "defer" (it defers almost always), so nothing extra.
+- **Fallback rule:** no significant change anywhere.
+- Secondary: ext_frozen_step1100 DA 78.8, HA 79.6 (+3/−1). The A4 rows come when A1 is rerun.
+
+**A2, CLM head ensemble (`a2_ensemble_bounds.md`).** 10 members, each choosing its epoch at 2–11
+(validation 86.0–87.2%).
+- **Accuracy:** the same as one set of heads. **Calibration is better** on every record set
+  (ECE: A_da2 5.4 vs 7.0; val 5.4 vs 7.9; B_none 8.8 vs 11.2).
+- **Bounds:** "decisive" (LCB(top) > UCB(runner-up)) on 92.1% of A_da2. Decisive records are 93.7%
+  correct, non-decisive ones 36.8% (validation: 91.9 vs 55.4).
+- **But the margin flags errors no better than the mean confidence:** AUROC 0.936 vs 0.933 on A_da2,
+  difference +0.003 [−0.007, +0.016]. On validation +0.006 [+0.001, +0.012], tiny.
+- **"Diagnose or test more" (offline sketch, A_da2):** 7.9% of records get all tests, giving
+  89.2 → 90.0% (+4/−2, p = 0.69) at $1,259 → $1,494 per case. All tests for everyone: 90.4% at $4,082.
+- **Conclusion:** ensembling gives better calibration and a clean "unsure" flag, but the plain
+  confidence works almost as well, and the HA's remaining errors are not fixed by more tests.
+
+**A3, combined HAs (`a3_combined_ha.md`).** No combination beat the separately fine-tuned HA on any
+record set (A_da2: all Holm p = 1.0; best d_all_four 89.6% vs 88.8%, +4/−2). Averaging it with the
+baseline HA gave the best calibration on A_da2 (ECE 1.9% vs 3.5%). **Combining HAs adds no accuracy.**
+
+**A4b, weak DA with the CLM HA** (`frozen_h2/test_step_0200`): **DA 78.3%**, undiagnosed 5.8%, 1.53
+tests, $1,442, CT for 64.6% of patients. **HA final hypothesis 89.2%**, the largest DA–HA gap seen
+(10.9 points). A weak DA still gathers tests from which the HA reaches about 89%. Paired statistics
+come when A1 is rerun.
+
+**A4a:** running (52776116, 52776117).
+
+**A5, every system vs the baseline model** (MIMIC test, DA's diagnosis; `a5_vs_baseline_diagnosis/`;
+system minus baseline; Holm over the 6):
+
+| System | Accuracy [95% CI] | Cost |
+|---|---|---|
+| step2 | 0.0 [−3.7, +3.7] | +$27, n.s. |
+| h3a | +0.4 [−3.8, +4.6] | **−$234 [−305, −170], Holm p = 0.003** |
+| h3b | **−10.8 [−16.7, −5.0], Holm p = 0.004** | −$723, p < 0.001 |
+| h4b | −2.5 [−6.7, +1.3] | −$24, n.s. |
+| h4c_joint | −1.2 [−6.2, +4.2] | −$70, p = 0.075 |
+| h4c_frozen | −3.3 [−8.3, +1.7] | +$175, p < 0.001 |
+
+No system is more accurate than the baseline. Only H3b is less accurate. H3a's cost saving is now
+confirmed against the baseline directly.
+
+**H4c extension, frozen step 1100 test** (`outputs/contrastive/stats/h4c_ext_diagnosis/`):
+- **78.8%, with 0.00 tests and $0 per case.** The DA stopped ordering tests and diagnoses from the
+  history alone; the HA's history-only accuracy is about 78%.
+- vs frozen 400: −3.3 [−9.6, +2.9]. vs H3a: −7.1 [−12.5, −1.7], Holm p = 0.048. vs baseline: −6.7
+  [−13.3, −0.4], p = 0.052 (Holm 0.10).
+- Validation accuracy (76.4%) did not reveal the collapse. Choosing on accuracy alone picked a
+  degenerate zero-cost policy.

@@ -252,6 +252,11 @@ above were seen. The 700-step H4c result stays the primary one.
     (2026-11-23 19:18; copied to `outputs/contrastive/joint/joint_h2/original_run_validation_points.csv`)
     and in the table above. `figures/h4_report/` (2026-11-24 11:29) was drawn before the overwrite; do
     not regenerate it.
+  - **Frozen step 1100 on test** (the validation choice over 100–1900, job 52769959; statistics in
+    `outputs/contrastive/stats/h4c_ext_*`): **78.8% with 0.00 tests and $0 per case.** The DA
+    collapsed to diagnosing from the history alone, which validation accuracy (76.4%) did not reveal.
+    vs frozen 400: −3.3 [−9.6, +2.9]; vs H3a: −7.1 [−12.5, −1.7], Holm p = 0.048; vs baseline: −6.7,
+    p = 0.052. **Training longer did not help; it drifted to a degenerate zero-test policy.**
   - The current joint run is a **second joint run from step 100** (exploratory). Its steps 200–700
     repeat the original with the same settings: 58.8, 61.3, 66.4, 67.7, **67.9**, 64.3% against the
     original 54.6, 62.5, 55.7, 70.8, **73.6**, 68.5%. The two runs differ by up to 10.7 points at
