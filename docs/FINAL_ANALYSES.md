@@ -134,4 +134,12 @@ All results go to **`outputs/final_analyses/`** (`a1_disagreement.md`, `a2_ensem
 
 Still to do once the GPU evaluations finish: `jobs/final_a4_stats.sh`, and rerun `jobs/final_disagreement.sh`.
 
+- 52771468 **failed** (1 of 11 tests): `test_entry_point_swaps_the_class` imported the real
+  entry point after the test file had replaced `trl` with a stub. This was a test bug; the code was
+  fine (the hidden-HA environment and ensemble tests passed). The check now runs in a separate
+  process. 52771469/70/72/73 never started and were cancelled; they are resubmitted after the fixed
+  tests pass. 52771471 (A4b) was unaffected.
+- 52773930: A5 (`jobs/final_vs_baseline_stats.sh`). 52774073: H4c-ext statistics
+  (`jobs/contrastive_h4c_ext_stats.sh`, frozen step 1100 test finished).
+
 (results to be filled in)

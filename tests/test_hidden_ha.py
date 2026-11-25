@@ -53,15 +53,20 @@ class HiddenEnvironmentTest(unittest.TestCase):
         self.assertFalse(hidden.error)
 
     def test_entry_point_swaps_the_class(self):
-        import importlib
+        # In a fresh process: this file replaces ``trl`` with a stub, and the entry point needs the real one.
+        import importlib.util
+        import subprocess
+        from pathlib import Path
 
-        try:
-            importlib.import_module("hydra")
-        except ImportError:
-            self.skipTest("hydra not installed")
-        module = importlib.import_module("src.evaluate_hidden_ha")
-        self.assertIs(sys.modules["src.evaluate_frozen_ha"].FrozenHAEnvironment, HiddenHAEnvironment)
-        self.assertTrue(callable(module.main))
+        if importlib.util.find_spec("hydra") is None or importlib.util.find_spec("vllm") is None:
+            self.skipTest("the training stack (hydra, vllm) is not installed")
+        code = ("import src.evaluate_hidden_ha as h, src.evaluate_frozen_ha as f; "
+                "from src.environment.hidden_ha_environment import HiddenHAEnvironment as H; "
+                "assert f.FrozenHAEnvironment is H and callable(h.main); print('ok')")
+        repo = Path(__file__).resolve().parents[1]
+        result = subprocess.run([sys.executable, "-c", code], cwd=repo, capture_output=True, text=True, timeout=600)
+        self.assertEqual(result.returncode, 0, result.stderr[-2000:])
+        self.assertIn("ok", result.stdout)
 
 
 if __name__ == "__main__":
