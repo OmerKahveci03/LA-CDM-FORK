@@ -90,6 +90,15 @@ Code: `scripts/combined_ha.py`. Job: `jobs/final_ha_offline.sh`.
   its (unchanged) CLM heads → `outputs/contrastive/joint/frozen_h2/test_step_0200`. Questions: how
   far does the DA fall below its HA, and does "defer" recover it (A1's script)?
 
+## A5. Every system against the baseline model (added November 25, before running)
+
+H3a and the H4c arms were never compared with the baseline model directly on MIMIC, only with step 2, with
+H3a and with each other. Job: `jobs/final_vs_baseline_stats.sh`. Baseline minus each of step2, h3a, h3b,
+h4b, h4c_joint and h4c_frozen on the 240 test patients, for the DA's diagnosis and for the HA's final
+hypothesis. Exact McNemar and paired bootstrap 95% CIs for accuracy; permutation tests for cost and tests;
+Holm across the 6 systems. This is descriptive: it completes the comparison table and decides no
+hypothesis (H3/H4 keep their own pre-registered comparisons).
+
 ## How to run (commit, push, `git pull` first)
 
 ```bash
@@ -111,4 +120,18 @@ All results go to **`outputs/final_analyses/`** (`a1_disagreement.md`, `a2_ensem
 
 ## Run log and results
 
-(to be filled in)
+**Submitted on November 25, 2026:**
+
+| Job | What | Waits for |
+|---|---|---|
+| 52771468 | unit tests (`test_hidden_ha`, `test_final_analyses`, `test_frozen_ha`) | – |
+| 52771469 | A4a: baseline DA, HA hidden | tests |
+| 52771470 | A4a: H3a DA, HA hidden | tests |
+| 52771471 | A4b: frozen step-200 DA + CLM HA | – |
+| 52771472 | A1: `jobs/final_disagreement.sh` | tests |
+| 52771473 | A2 + A3: `jobs/final_ha_offline.sh` | tests |
+| 52769959 | (H4c extension) frozen step-1100 test; then `jobs/contrastive_h4c_ext_stats.sh` | – |
+
+Still to do once the GPU evaluations finish: `jobs/final_a4_stats.sh`, and rerun `jobs/final_disagreement.sh`.
+
+(results to be filled in)
