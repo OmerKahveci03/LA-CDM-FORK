@@ -124,6 +124,13 @@ Unless noted, everything is on the same **240 MIMIC test patients**.
 - **A3, combining HAs** (equal-weight averages of the HAs' probabilities): **no combination beat the
   separately fine-tuned HA** on any record set (on the baseline DA's records, best 89.6% vs 88.8%,
   n.s.). Averaging it with the baseline HA gave the best calibration (ECE 1.9% vs 3.5%).
+- **A6, "H3a + defer" vs the baseline** (H3a's DA chooses the tests; its frozen separately fine-tuned
+  HA's final hypothesis is the diagnosis; both parts fixed before this test):
+  - MIMIC: **88.3% vs 85.4%, +2.9 [−1.7, +7.5]** (+20/−13 patients), p = 0.30. External: 92.1% vs
+    86.8%, +5.3 [0.0, +11.2], p = 0.12.
+  - **Not significantly more accurate**, but leaning positive on both data sets, at **$1,025 vs $1,259**
+    (−$234, significant). The strongest system we have: at least as accurate as the paper's method and
+    about 19% cheaper.
 - **A5, every system vs the baseline:** **no system is more accurate than the baseline.** Only H3b is
   less accurate (−10.8, significant). H3a is the only one significantly cheaper (−$234).
 - **The resume bug** (found during H4): restarting a two-adapter run silently reset the DA to untrained.
@@ -140,7 +147,6 @@ Unless noted, everything is on the same **240 MIMIC test patients**.
 - **Pending:**
   - A4a (the baseline DA and the H3a DA with the HA hidden) is running; then A1 is rerun with the
     A4 rows.
-  - A6: "H3a + defer" vs the baseline.
   - **H3c** (`docs/HYPOTHESIS_H3C.md`): a new DA trained against the frozen HA where the HA's hypothesis
     is always the diagnosis (the DA never overrides it). Primary comparison: vs "H3a + defer".
 

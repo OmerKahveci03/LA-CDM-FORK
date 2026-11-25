@@ -163,7 +163,7 @@ Still to do once the GPU evaluations finish: `jobs/final_a4_stats.sh`, and rerun
   `src/evaluate_hidden_ha.py` now has its own `@hydra.main` and calls the original function. The
   failed output folders (logs only) were deleted. Rerun with a smoke gate: 52776115 (smoke,
   2 patients) → 52776116 (baseline DA) and 52776117 (H3a DA).
-- 52773930: A5 (`jobs/final_vs_baseline_stats.sh`). 52774073: H4c-ext statistics
+- 52773930: A5 (`jobs/final_vs_baseline_stats.sh`). 52780632: A6 (`jobs/final_defer_vs_baseline.sh`). 52774073: H4c-ext statistics
   (`jobs/contrastive_h4c_ext_stats.sh`, frozen step 1100 test finished).
 
 ### Results (November 25, 2026)
@@ -210,6 +210,18 @@ tests, $1,442, CT for 64.6% of patients. **HA final hypothesis 89.2%**, the larg
 come when A1 is rerun.
 
 **A4a:** running (52776116, 52776117).
+
+**A6, "H3a + defer" vs the baseline** (`a6_defer_vs_baseline.md`; candidate minus baseline, paired
+bootstrap 95% CI, exact McNemar):
+
+| Comparison | Candidate | Baseline | Difference [95% CI] | Wins/losses | p |
+|---|---|---|---|---|---|
+| **MIMIC: H3a + defer (primary)** | 88.3 | 85.4 | **+2.9 [−1.7, +7.5]** | +20/−13 | 0.30 |
+| External: H3a + defer | 92.1 | 86.8 | +5.3 [0.0, +11.2] | +14/−6 | 0.12 |
+| MIMIC: step2 + defer (chosen after A1) | 89.2 | 85.4 | +3.8 [−0.8, +8.3] | +20/−11 | 0.15 |
+
+**Verdict:** not better by the rule (the CI includes 0). "H3a + defer" is at least as accurate as the
+baseline (leaning positive on both data sets) and significantly cheaper (−$234, A5).
 
 **A5, every system vs the baseline model** (MIMIC test, DA's diagnosis; `a5_vs_baseline_diagnosis/`;
 system minus baseline; Holm over the 6):

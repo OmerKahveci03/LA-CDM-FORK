@@ -55,4 +55,7 @@ sbatch --export=ALL,ADAPTER_STEP=<step> slurm/evaluate_defer_ha.sbatch
 
 ## Results
 
-(to be filled in)
+**Run log:** submitted on November 25, 2026: 52780633 (unit tests) → 52780634 (smoke, 4 steps) →
+52780635 (700 steps) → 52780636 (spare resume after a time-out).
+
+(results to be filled in)
