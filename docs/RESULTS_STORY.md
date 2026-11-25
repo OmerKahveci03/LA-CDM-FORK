@@ -137,8 +137,12 @@ Unless noted, everything is on the same **240 MIMIC test patients**.
     degenerate zero-test policy** that choosing on validation accuracy alone did not catch.
   - The joint arm's accidental repeat of steps 100–700 differed from the original by up to 10.7
     points at the same step: direct evidence of **run-to-run noise**.
-- **Pending:** A4a (the baseline DA and the H3a DA with the HA hidden) is running; then A1 is rerun
-  with the A4 rows.
+- **Pending:**
+  - A4a (the baseline DA and the H3a DA with the HA hidden) is running; then A1 is rerun with the
+    A4 rows.
+  - A6: "H3a + defer" vs the baseline.
+  - **H3c** (`docs/HYPOTHESIS_H3C.md`): a new DA trained against the frozen HA where the HA's hypothesis
+    is always the diagnosis (the DA never overrides it). Primary comparison: vs "H3a + defer".
 
 ## Where the details are
 

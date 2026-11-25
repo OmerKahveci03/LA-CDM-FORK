@@ -99,6 +99,23 @@ hypothesis. Exact McNemar and paired bootstrap 95% CIs for accuracy; permutation
 Holm across the 6 systems. This is descriptive: it completes the comparison table and decides no
 hypothesis (H3/H4 keep their own pre-registered comparisons).
 
+## A6. "H3a + defer" against the baseline (added November 25, after A1–A5, before running)
+
+**H3a + defer:** the H3a system, whose DA chooses the tests, with the frozen separately fine-tuned HA's
+final hypothesis as the diagnosis. It was chosen as the candidate "best system" **before** this
+comparison, because both parts were fixed earlier: H3a was the best system on validation and cost
+(H3/A5), and "defer" was A1's pre-registered rule.
+
+- **Primary (MIMIC test, 240 patients):** H3a's HA final hypothesis vs the baseline's DA diagnosis,
+  per patient. Exact McNemar, and a paired bootstrap 95% CI of the accuracy difference. Cost is H3a's
+  (the tests do not change); its difference from the baseline was already tested in A5
+  (−$234, Holm p = 0.003). **Better than the baseline** if the CI is entirely above 0.
+- **Secondary:** the same comparison on Edward's external set (152 patients); and
+  "step2 + defer" vs baseline. Step 2 had the highest "defer" accuracy in A1, so its comparison is
+  **chosen after seeing test results** and is reported as such.
+- Code: `scripts/defer_vs_baseline.py`. Job: `jobs/final_defer_vs_baseline.sh`. Output:
+  `outputs/final_analyses/a6_defer_vs_baseline.{md,json}`.
+
 ## How to run (commit, push, `git pull` first)
 
 ```bash
