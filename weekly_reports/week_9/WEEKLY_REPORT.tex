@@ -6,7 +6,7 @@
 
 \title{CAI6734 Weekly Report 9: A Contrastive Hypothesis Agent That Learns Alongside the Decision Agent}
 \author{Omer Kahveci}
-\date{November 23, 2026}
+\date{November 24, 2026}
 
 \begin{document}
 \maketitle
@@ -19,7 +19,7 @@ on its own was a better diagnoser than the HA inside the shared adapter (H2).
 Retraining the DA against that frozen HA kept accuracy and cut cost by about
 20\% (H3a).
 
-In this week's meeting it was suggested to try a \emph{Contrastive Language
+After the Week 8 report, it was suggested in our meeting to try a \emph{Contrastive Language
 Model} (CLM) as the HA: a model that maps the patient's state and the possible
 final outputs into one embedding space. This also allowed us to revisit the
 original idea of LA-CDM, that both agents learn \emph{together}, with an HA
@@ -145,10 +145,13 @@ is above $-$3, so it is not worse. On the other record sets it was within 1.2
 points of the separately fine-tuned HA as well (Table~\ref{tab:h4a}; these were
 secondary and not tested separately). On the
 baseline DA's records its calibration was slightly worse (ECE 6.3\% against
-4.6\%). The close agreement is expected: the chosen heads read the separately
-fine-tuned HA's own representation. Plain Llama with only the trained heads
-reached 85.4\% on the baseline DA's records, close to the baseline HA (87.9\%),
-with no fine-tuning of the language model at all.
+4.6\%). The close agreement is expected, and it limits what H4a shows: the chosen
+heads read the separately fine-tuned HA's own representation, so most of the
+CLM HA's accuracy is inherited from that HA rather than added by the contrastive
+heads. The CLM on its own is better judged by the plain-Llama version: with only
+the trained heads and no fine-tuning of the language model at all, it reached
+85.4\% on the baseline DA's records, below both the baseline HA (87.9\%) and the
+separately fine-tuned HA (88.8\%).
 
 \subsection*{H4b: The Baseline DA with the CLM HA}
 
@@ -245,8 +248,9 @@ class-mean accuracy (81.3\%) equals the paper's LA-CDM result at a lower cost
 
 \subsection*{What I Learned}
 
-A contrastive HA built on a frozen language model is a practical diagnoser: with
-only the small heads trained, it matched our best HA. Its real advantage, that it
+A contrastive HA built on a frozen language model is a practical diagnoser:
+with only the small heads trained on top of our best HA, it matched that HA, and
+on plain Llama it came within a few points of the baseline HA. Its real advantage, that it
 can be updated cheaply while the DA trains, did not translate into a better
 system. A likely reason is that there was little left for the HA to learn: its
 online loss was already low, and in every system the HA's last hypothesis
@@ -254,7 +258,8 @@ online loss was already low, and in every system the HA's last hypothesis
 (82--86\%, Figure~\ref{fig:h4test}). The remaining errors come from the DA,
 through the tests it orders and the correct hypotheses it overrides. So far,
 retraining the DA against a pre-trained, frozen HA (H3a) gives the best
-trade-off: the same accuracy as every other system at the lowest cost.
+trade-off: no detectable accuracy difference from any other system, at the
+lowest cost.
 
 \section{Challenges}
 \label{sec:challenges}
@@ -277,7 +282,12 @@ for the most part. H3a resumed at step 875 and was untrained at step 900, and H3
 resumed at step 700, dipped at step 800 and recovered by relearning. Only H3a's
 drift towards ordering fewer tests at step 800 happened within one uninterrupted
 job. The H3 and H4 results themselves are not affected: every chosen checkpoint
-was saved before any resume.
+was saved before any resume. One qualification: H3b's steps 800 and 900 came
+after its faulty resume, so its checkpoint was effectively chosen among steps
+100--700. Given its 11-point deficit, a later checkpoint is unlikely to have
+changed the H3b conclusion. The same applies to the team's observation that
+validation accuracy falls after about a third of the training patients: the
+large drop after step 700 was this bug, not overfitting.
 
 \begin{figure}[htbp]
   \centering
@@ -299,21 +309,36 @@ comparison remains the pre-registered result.
 tested. The 240-patient test set gives intervals of about $\pm$4--7 points for
 paired differences.
 
-\section{Next Steps}
+\section{Next Steps: Towards the Final Submission}
+
+This is the last weekly report; the team aims to submit the final work by
+Sunday, November 29. Following this week's meeting, the CLM becomes the main
+direction of the write-up. Before the submission I plan, in order of priority:
 
 \begin{itemize}
-  \item Finish the 1,900-step extension (both arms) and report it as
-        exploratory, with steps chosen on validation.
-  \item Add the resume fix to the H3 training script, so any future H3-style
-        run can be resumed safely.
-  \item Test a simple rule suggested by all systems so far: use the HA's final
-        hypothesis as the diagnosis, or let the DA defer to it when the HA is
-        confident. This needs no training; the rule will be chosen on
-        validation and then evaluated once on the existing test transcripts.
-  \item If time allows, repeat H3a and the two H4c arms with another seed, since
-        single runs cannot resolve differences of 2 points.
-  \item Start assembling the final report around H1--H4.
+  \item \textbf{DA--HA disagreement analysis} (no training): for every system,
+        count how often the DA overrides a correct HA and how often it corrects
+        a wrong one, and test the rules ``diagnose with the HA's final
+        hypothesis'' and ``defer to the HA above a confidence threshold''. Any
+        threshold will be chosen on validation episodes and evaluated once on
+        test.
+  \item \textbf{External validation:} run the fixed baseline, H3a and H4
+        systems once on Edward's external test set (152 openly licensed
+        published case reports, not MIMIC) to check how they generalise.
+  \item \textbf{Confidence bounds for the HA} (suggested in this week's team
+        meeting):
+        train an ensemble of CLM heads, which takes minutes, to obtain lower
+        and upper confidence bounds per disease, and test offline whether the
+        bounds identify the HA's errors and support a ``diagnose or test more''
+        rule.
+  \item \textbf{Cheap ablations without training:} the DA evaluated with no HA
+        messages, and a weaker DA (the untrained model) with the CLM HA.
+  \item Finish the 1,900-step extension and report it as exploratory.
 \end{itemize}
+
+Ideas that need new DA training runs (bounds in the DA's input, a combined HA,
+CLM-guided search, a contrastive DA, extra seeds) will be described as future
+work unless the analyses above point clearly to one of them.
 
 \section{AI Disclaimer}
 

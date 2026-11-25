@@ -88,7 +88,41 @@ probabilities and pass on only the top one.
 - Related work: Jev can be cited as an industry example of "state → calibrated choice over typed
   options", but without its (vendor-reported, unverified) performance numbers.
 
-## 5. Smaller items
+## 5. From the team meeting with Dr. Liu (November 24, 2026)
+
+Source: `ignore/zoom_meeting_notes.md` (automatic meeting summary). **The team aims to submit by
+Sunday, November 29.** Xuefeng recommended making the CLM the main research direction for the
+paper, rather than the search-based approach.
+
+Ideas raised that are new here:
+- **5a. A weaker DA with the CLM HA.** Does a good HA matter more when the DA is weaker? Cheap
+  versions need no training: the untrained (zero-shot) DA + CLM HA, or early H4c checkpoints
+  (steps 100–300) tested with the CLM HA.
+- **5b. Confidence bounds (LCB/UCB) for the DA (Xuefeng).** Give the DA a lower and an upper
+  bound for each disease, not one probability. This needs an uncertainty estimate first. The
+  cheapest for the CLM HA is an ensemble of heads (retrain the heads with 5–10 seeds on the cached
+  embeddings, which takes minutes) and the spread of their probabilities. Then:
+  (i) check offline whether the bounds are meaningful (coverage, and whether wide bounds mark
+  errors); (ii) a rule such as "diagnose when LCB(top) > UCB(runner-up), otherwise order a test";
+  (iii) bounds in the DA's message, which needs DA training.
+- **5c. A combined HA.** Merge the separately fine-tuned HA's and the CLM HA's probabilities (or
+  feed the baseline HA's output into the CLM) into one hypothesis for the DA. Offline first: average
+  the two HAs' probabilities on the H2/H4a record sets (CPU).
+- **5d. CLM + agentic search (a three-part design).** The CLM proposes hypotheses; when the top
+  options are close, a search agent gathers information to separate them; the refined
+  distribution goes to the DA. Piyush noted that the DA's test ordering already is the search,
+  so this could be framed as uncertainty-driven test selection (connects to 5b and to H5 in
+  section 3). Large; after the submission.
+- **5e. Replay of previous patients in DA training.** Suggested against "validation falls after a
+  third of the training patients". **Caution:** the large drop after step 700 was the resume
+  bug, not overfitting (see `HYPOTHESIS_H4.md`, H4c-ext); tell the team. The smaller swings
+  (5–13 points between checkpoints, the frozen arm after step 500) look like single-run
+  instability. Revisit only if the corrected extension still degrades.
+
+Already in this file: the disagreement analysis (item 1, which Edward's
+`edward/da_ha_disagreement.py` computes) and the ablation without the HA (item 2).
+
+## 6. Smaller items
 
 - CLM heads learned *from scratch* jointly with the DA (closest to the paper's joint design;
   H4c started from pre-trained heads).
