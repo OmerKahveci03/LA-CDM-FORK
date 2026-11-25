@@ -139,6 +139,8 @@ Still to do once the GPU evaluations finish: `jobs/final_a4_stats.sh`, and rerun
   fine (the hidden-HA environment and ensemble tests passed). The check now runs in a separate
   process. 52771469/70/72/73 never started and were cancelled; they are resubmitted after the fixed
   tests pass. 52771471 (A4b) was unaffected.
+- Resubmitted: 52774123 (unit tests) → 52774124 (A4a baseline DA, HA hidden), 52774125 (A4a H3a
+  DA, HA hidden), 52774126 (A1), 52774127 (A2 + A3).
 - 52773930: A5 (`jobs/final_vs_baseline_stats.sh`). 52774073: H4c-ext statistics
   (`jobs/contrastive_h4c_ext_stats.sh`, frozen step 1100 test finished).
 

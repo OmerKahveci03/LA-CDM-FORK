@@ -40,7 +40,9 @@ Unless noted, everything is on the same **240 MIMIC test patients**.
   - All tests: 86.2% at about 3× the cost.
   - **The DA picks good tests. The ceiling is the HA.**
 - **H2, the separately fine-tuned HA** (SFT on its own, then frozen) vs the baseline HA, on identical records:
+<!-- +15 points from what? +16.2 points from what? -->
   - **No tests: +15.0 points** [+8.7, +21.3]; **random tests: +16.2** [+10.0, +22.1].
+  <!-- Not clear how well the H2 HA did. Is it 88.8 or 87.9? -->
   - Baseline DA's tests: 88.8% vs 87.9%; all tests: +2.1 [−2.1, +6.2], not significant.
   - ECE 4.5% vs 5.6%.
   - A pre-registered stability check failed: two seeds differ by 3.7 points on all tests (p = 0.022).
@@ -58,6 +60,7 @@ Unless noted, everything is on the same **240 MIMIC test patients**.
     significantly cheaper (below).
   - **The best system so far: same accuracy, about 20% cheaper.**
 - **H3b** (H3a plus a reward for raising the HA's belief; step 700):
+<!-- -10.8 points from h3a I presume? -->
   - 74.6%, $536, 2.10 tests. **−10.8 points** vs step 2 [−16.7, −5.4] and −11.2 vs H3a [−16.2, −6.2],
     both p < 0.001.
   - It nearly stopped ordering CT (1.7% vs 66.7%).

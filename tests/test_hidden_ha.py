@@ -60,10 +60,14 @@ class HiddenEnvironmentTest(unittest.TestCase):
 
         if importlib.util.find_spec("hydra") is None or importlib.util.find_spec("vllm") is None:
             self.skipTest("the training stack (hydra, vllm) is not installed")
-        code = ("import src.evaluate_hidden_ha as h, src.evaluate_frozen_ha as f; "
-                "from src.environment.hidden_ha_environment import HiddenHAEnvironment as H; "
-                "assert f.FrozenHAEnvironment is H and callable(h.main); print('ok')")
+        # The entry point must load the real config (as Hydra does when the job runs) and reach the
+        # original evaluation function. Compose the config with Hydra's API, then check the wiring.
         repo = Path(__file__).resolve().parents[1]
+        code = ("import src.evaluate_hidden_ha as h, src.evaluate_frozen_ha as f; "
+                "from hydra import compose, initialize_config_dir; "
+                "assert hasattr(f.main, '__wrapped__') and callable(h.main); "
+                f"initialize_config_dir(version_base=None, config_dir={str(repo / 'configs')!r}); "
+                "cfg = compose(config_name='defaults'); assert 'evaluation' in cfg; print('ok')")
         result = subprocess.run([sys.executable, "-c", code], cwd=repo, capture_output=True, text=True, timeout=600)
         self.assertEqual(result.returncode, 0, result.stderr[-2000:])
         self.assertIn("ok", result.stdout)
