@@ -236,6 +236,26 @@ above were seen. The 700-step H4c result stays the primary one.
   the folder): same DA adapter, heads and data position, but **the AdamW moments of the DA
   and of the heads restart fresh at step 700**. The 700-step H4c results ran without a resume
   and are unaffected.
+- **Second attempt (jobs 52598698/52598701, November 24).** The **frozen** arm resumed correctly from
+  the rebuilt `checkpoint-700` (no jump in invalid formats) and reached 1,900 steps. Validation DA
+  accuracy: 800 67.1%, 900 66.3%, 1000 70.6%, **1100 76.4%** (best), 1200 74.5%, 1300 73.9%,
+  1400 73.9%, 1500 75.4%, 1600 74.9%, 1700 73.1%, 1800 70.8%, 1900 74.5%. The **joint** arm was
+  submitted before the job-script fix reached the cluster and resumed from the Trainer's kept
+  "best" `checkpoint-100`, so it **retrained steps 100 onward**. Its snapshots
+  `adapters/step_0200`… were overwritten (step 600 at 2026-11-24 23:54), and its validation
+  summaries for steps 200+ were rewritten. Consequences:
+  - The pre-registered H4c results stand. The MIMIC test (`test_step_0600`, November 22) and the
+    external test (`outputs/ext_v2_trained/h4c`, run at 19:14–19:45 on November 24) both used the
+    **original** step-600 model, which was overwritten later. That model can no longer be
+    re-tested.
+  - The original joint validation curve is preserved in `figures/h4/h4_validation_points.csv`
+    (2026-11-23 19:18; copied to `outputs/contrastive/joint/joint_h2/original_run_validation_points.csv`)
+    and in the table above. `figures/h4_report/` (2026-11-24 11:29) was drawn before the overwrite; do
+    not regenerate it.
+  - The current joint run is a **second joint run from step 100** (exploratory). Its steps 200–700
+    repeat the original with the same settings: 58.8, 61.3, 66.4, 67.7, **67.9**, 64.3% against the
+    original 54.6, 62.5, 55.7, 70.8, **73.6**, 68.5%. The two runs differ by up to 10.7 points at
+    the same step, which is direct evidence of run-to-run noise.
 
 Secondary record sets (B_none, C_random2, D_all): see
 `outputs/contrastive/stats/h4a_<arm>/test_stats.md` (to be added).

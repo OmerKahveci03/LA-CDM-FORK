@@ -47,6 +47,40 @@ sbatch --export=ALL,ARMS=baseline edward/trained_ext_v2.sbatch
 - Share with Edward: `cp -r outputs/ext_v2_trained /blue/cai6734/omerkahveci/`. This holds only
   results on his data, with no MIMIC and no model weights.
 
+## Results (job 52653909, November 24, 2026; commit 64baf59)
+
+All four arms finished (about 30 minutes each). Statistics: `jobs/ext_v2_stats.sh` →
+`outputs/ext_v2_trained/stats_{diagnosis,final_hypothesis}/test_stats.md`. The results were shared with
+Edward at `/blue/cai6734/omerkahveci/ext_v2_trained/`.
+
+| System | DA accuracy, external [95% CI] | HA final hypothesis, external | Cost/case, external | DA accuracy, MIMIC test |
+|---|---|---|---|---|
+| Baseline (attempt 2, step 600) | 86.8% [80.5, 91.3] | 90.1% | $1,374 | 85.4% |
+| H3a (retrained DA + separately fine-tuned HA) | 89.5% [83.6, 93.4] | 92.1% | $1,077 | 85.8% |
+| H4b (baseline DA + CLM HA) | 87.5% [81.3, 91.8] | 90.1% | $1,320 | 82.9% |
+| H4c (joint DA + CLM HA, step 600) | 78.9% [71.8, 84.7] | 82.2% | $1,181 | 84.2% |
+
+Paired, the baseline minus each system (same 152 patients; exact McNemar, with Holm correction over the 3 comparisons):
+- **H3a:** accuracy H3a +2.6 points [−3.3, +7.9] (12 vs 8 discordant), not significant;
+  **cost H3a −$298 [−$401, −$203], p < 0.001**. H3a's ~20% cost saving **replicates on
+  independent data**. This is also the first direct test of H3a against the baseline model.
+- **H4b:** accuracy −0.7 [−5.9, +4.6], cost +$55 (p = 0.21); no difference.
+- **H4c:** accuracy H4c −7.9 points [−15.1, −1.3] (10 vs 22), McNemar p = 0.050, **Holm p = 0.15**
+  (a likely drop, not established); cost H4c −$193 [−$304, −$91]. Its HA also dropped (82.2% vs
+  90.1% for the same CLM HA in H4b). A hypothesis, not verified: the continuously updated heads
+  fitted MIMIC-style records and generalise worse.
+
+DA–HA disagreement (`da_ha_disagreement.json`): in every system the DA overrode a correct HA at
+least as often as it corrected a wrong one (overrode/corrected: baseline 3/1 plus 3 undiagnosed with
+the HA right; H3a 4/0; H4b 2/2 plus 4 undiagnosed with the HA right; H4c 8/3). So "always use the
+HA's final hypothesis" was 2.6–3.3 points better than the DA in every system. The counts are small and
+not significant on their own (for example 4 vs 0, p ≈ 0.13), but the direction matches MIMIC. That
+rule has no parameter and was written down before these results (`docs/NEXT_EXPERIMENTS.md` item 1),
+so it can be reported here; any confidence threshold must be chosen on MIMIC validation, not on this set.
+
+How to read it: this set is probably easier than MIMIC (radiology names the answer for 37% of
+patients), so the fair claim is "generalises at least as well", not "does better".
+
 ## Files
 
 | File | Origin |
