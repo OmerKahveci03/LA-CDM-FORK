@@ -148,11 +148,17 @@ Unless noted, everything is on the same **240 MIMIC test patients**.
     learned to diagnose from the history alone, trading accuracy for zero cost: −7.1 vs H3a (Holm
     p = 0.048), −6.7 vs the baseline (p = 0.052). **Training longer did not help; it drifted to a
     degenerate zero-test policy** that choosing on validation accuracy alone did not catch.
+  - **The joint arm drifted the same way:** from step 1,200 on, 0.04–0.17 tests per patient, while
+    validation accuracy rose to 73–75%. **H3c was starting to drift by step 700** (0.33 tests). With this
+    reward, longer training reliably learns to skip tests, and accuracy-only validation rewards it,
+    likely because shorter episodes leave fewer chances for format errors. Exploratory test of the
+    joint arm at step 1,000 (the best step with ≥ 0.5 tests) pending.
   - The joint arm's accidental repeat of steps 100–700 differed from the original by up to 10.7
     points at the same step: direct evidence of **run-to-run noise**.
 - **Pending:**
   - **H3c** (`docs/HYPOTHESIS_H3C.md`): a new DA trained against the frozen HA where the HA's hypothesis
     is always the diagnosis (the DA never overrides it). Primary comparison: vs "H3a + defer".
+    Training done; **step 500 chosen on validation** (70.6%, 1.63 tests per patient); test pending.
 
 ## Where the details are
 

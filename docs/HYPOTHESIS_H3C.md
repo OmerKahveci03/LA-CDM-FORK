@@ -68,4 +68,18 @@ sbatch --export=ALL,ADAPTER_STEP=<step> slurm/evaluate_defer_ha.sbatch
   step 200 58.1% (1.55). No zero-test shortcut yet. About 4 h per 100 steps, so step 700 lands
   around Thursday night, using the spare job.
 
-(results to be filled in)
+- **Training finished** in one job (52780635, `train exit=0` at 2026-11-26 09:33; the spare was not needed).
+
+**Validation curve** (DA = the HA's answer at the stop; accuracy, tests per patient, cost):
+
+| Step | 0 | 100 | 200 | 300 | 400 | **500** | 600 | 700 |
+|---|---|---|---|---|---|---|---|---|
+| Accuracy | 4.9% | 48.6% | 58.1% | 56.5% | 65.5% | **70.6%** | 69.2% | 68.8% |
+| Tests | 0.96 | 1.67 | 1.55 | 1.32 | 1.61 | **1.63** | 1.26 | 0.33 |
+| Cost | $714 | $1,236 | $1,264 | $1,151 | $1,149 | **$941** | $484 | $86 |
+
+**Chosen step: 500** (the highest validation accuracy; every step from 100 to 600 passes the 0.5-tests
+guard). Step 700 was already drifting into the zero-test shortcut (0.33 tests, $86) and would have
+been excluded by the guard anyway.
+
+(test results to be filled in)

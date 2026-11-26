@@ -257,6 +257,12 @@ above were seen. The 700-step H4c result stays the primary one.
     collapsed to diagnosing from the history alone, which validation accuracy (76.4%) did not reveal.
     vs frozen 400: −3.3 [−9.6, +2.9]; vs H3a: −7.1 [−12.5, −1.7], Holm p = 0.048; vs baseline: −6.7,
     p = 0.052. **Training longer did not help; it drifted to a degenerate zero-test policy.**
+  - **Joint rerun reached 1,900 steps (November 26).** Validation accuracy and tests per patient:
+    1000 70.1% (1.49), 1100 68.8% (1.26), then **1200–1900: 68.6–75.3% with only 0.04–0.17 tests**
+    ($3–28 per case). Like the frozen arm, the DA drifted to a near-zero-test policy after about 1,100
+    steps, and validation accuracy rose while it did. Unguarded, the best step would be 1800 (75.3%,
+    0.05 tests). **Exploratory choice: step 1000**, the best step with ≥ 0.5 tests per patient. This
+    is the H3c guard, applied here **after** seeing the frozen arm's step-1100 collapse, and reported as such.
   - The current joint run is a **second joint run from step 100** (exploratory). Its steps 200–700
     repeat the original with the same settings: 58.8, 61.3, 66.4, 67.7, **67.9**, 64.3% against the
     original 54.6, 62.5, 55.7, 70.8, **73.6**, 68.5%. The two runs differ by up to 10.7 points at
