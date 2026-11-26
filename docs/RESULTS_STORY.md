@@ -124,6 +124,12 @@ Unless noted, everything is on the same **240 MIMIC test patients**.
 - **A3, combining HAs** (equal-weight averages of the HAs' probabilities): **no combination beat the
   separately fine-tuned HA** on any record set (on the baseline DA's records, best 89.6% vs 88.8%,
   n.s.). Averaging it with the baseline HA gave the best calibration (ECE 1.9% vs 3.5%).
+- **A4a, the DA with the HA hidden** (the HA still computed from the DA's tests, but not shown to the DA):
+  - Baseline DA: **85.4% → 59.2%** (−26.2 [−32.9, −20.0], p < 0.001), with 25% of patients undiagnosed.
+    H3a's DA: **85.8% → 73.3%** (−12.5 [−17.5, −7.1], p < 0.001).
+  - But the HA's answer from those same tests stayed at **89.6% / 87.5%**, unchanged.
+  - **The DAs rely on the HA to diagnose, not to choose tests.** The HA's value is its diagnosis.
+    (Caveat: these DAs were trained with the HA, so this measures reliance, not a DA trained without one.)
 - **A6, "H3a + defer" vs the baseline** (H3a's DA chooses the tests; its frozen separately fine-tuned
   HA's final hypothesis is the diagnosis; both parts fixed before this test):
   - MIMIC: **88.3% vs 85.4%, +2.9 [−1.7, +7.5]** (+20/−13 patients), p = 0.30. External: 92.1% vs
@@ -145,8 +151,6 @@ Unless noted, everything is on the same **240 MIMIC test patients**.
   - The joint arm's accidental repeat of steps 100–700 differed from the original by up to 10.7
     points at the same step: direct evidence of **run-to-run noise**.
 - **Pending:**
-  - A4a (the baseline DA and the H3a DA with the HA hidden) is running; then A1 is rerun with the
-    A4 rows.
   - **H3c** (`docs/HYPOTHESIS_H3C.md`): a new DA trained against the frozen HA where the HA's hypothesis
     is always the diagnosis (the DA never overrides it). Primary comparison: vs "H3a + defer".
 

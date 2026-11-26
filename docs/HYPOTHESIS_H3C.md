@@ -58,4 +58,14 @@ sbatch --export=ALL,ADAPTER_STEP=<step> slurm/evaluate_defer_ha.sbatch
 **Run log:** submitted on November 25, 2026: 52780633 (unit tests) → 52780634 (smoke, 4 steps) →
 52780635 (700 steps) → 52780636 (spare resume after a time-out).
 
+- **Override check (November 25, about 6 h in):** validation at step 0: 49 diagnoses, 49 overridden;
+  training: 362 diagnosis-type actions, 361 overridden (the one exception is an invalid disease name or
+  a turn with no HA hypothesis yet, both by design). The smoke run had 0 diagnoses, so 0 overrides
+  was expected. Validation at step 100 done after about 6 h; expected to need the spare job and to
+  finish around Thursday evening.
+
+- **Validation so far** (about 8.5 h): step 0 4.9% (0.96 tests per patient), step 100 48.6% (1.67),
+  step 200 58.1% (1.55). No zero-test shortcut yet. About 4 h per 100 steps, so step 700 lands
+  around Thursday night, using the spare job.
+
 (results to be filled in)

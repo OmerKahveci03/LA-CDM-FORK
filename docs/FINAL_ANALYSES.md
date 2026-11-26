@@ -163,7 +163,8 @@ Still to do once the GPU evaluations finish: `jobs/final_a4_stats.sh`, and rerun
   `src/evaluate_hidden_ha.py` now has its own `@hydra.main` and calls the original function. The
   failed output folders (logs only) were deleted. Rerun with a smoke gate: 52776115 (smoke,
   2 patients) → 52776116 (baseline DA) and 52776117 (H3a DA).
-- 52773930: A5 (`jobs/final_vs_baseline_stats.sh`). 52780632: A6 (`jobs/final_defer_vs_baseline.sh`). 52774073: H4c-ext statistics
+- 52773930: A5 (`jobs/final_vs_baseline_stats.sh`). 52780632: A6 (`jobs/final_defer_vs_baseline.sh`).
+- 52776116/52776117 (A4a) finished. 52826192: A4a statistics; 52826193: A1 rerun with the A4 rows. 52774073: H4c-ext statistics
   (`jobs/contrastive_h4c_ext_stats.sh`, frozen step 1100 test finished).
 
 ### Results (November 25, 2026)
@@ -209,7 +210,24 @@ tests, $1,442, CT for 64.6% of patients. **HA final hypothesis 89.2%**, the larg
 (10.9 points). A weak DA still gathers tests from which the HA reaches about 89%. Paired statistics
 come when A1 is rerun.
 
-**A4a:** running (52776116, 52776117).
+**A4a, the DA with the HA hidden** (`a4a_*_diagnosis/test_stats.md`; hidden minus shown, same DA):
+
+| DA | HA shown | HA hidden | Difference [95% CI] | Undiagnosed (hidden) | HA's final hypothesis (hidden from the DA) |
+|---|---|---|---|---|---|
+| Baseline DA (step 600) | 85.4 | **59.2** | **−26.2 [−32.9, −20.0]**, p < 0.001 (9 vs 72) | 25.4% (shown: 2.1%) | **89.6** |
+| H3a DA (step 700) | 85.8 | **73.3** | **−12.5 [−17.5, −7.1]**, p < 0.001 (8 vs 38) | – | **87.5** |
+
+- **Both DAs rely heavily on the HA to diagnose:** the baseline DA much more than H3a's DA, which was
+  trained beside the separately fine-tuned HA.
+- **Test choice does not depend on the HA:** the hidden-HA runs ordered about as many tests (baseline
+  −0.10 per patient; H3a +0.05), and the HA's answer from those tests stayed at 87.5–89.6%, the same
+  as when shown. **The HA's contribution is the diagnosis, not guidance for the search.**
+- **Caveat:** these DAs were trained with HA messages, so part of the drop is a missing input they
+  expect. This measures reliance, not a DA trained without an HA (`NEXT_EXPERIMENTS.md` 2b).
+- **A1 rows (secondary):**
+  - a4b_frozen_step200: DA 78.3 → defer 89.2 (+30/−4), fallback 83.8 (p = 0.0002).
+  - a4a_baseline_hidden: DA 59.2 → defer 89.6 (+79/−6).
+  - a4a_h3a_hidden: DA 73.3 → defer 87.5 (+42/−8).
 
 **A6, "H3a + defer" vs the baseline** (`a6_defer_vs_baseline.md`; candidate minus baseline, paired
 bootstrap 95% CI, exact McNemar):
