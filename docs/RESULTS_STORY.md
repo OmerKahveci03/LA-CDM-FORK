@@ -159,6 +159,9 @@ Unless noted, everything is on the same **240 MIMIC test patients**.
   - **H3c** (`docs/HYPOTHESIS_H3C.md`): a new DA trained against the frozen HA where the HA's hypothesis
     is always the diagnosis (the DA never overrides it). Primary comparison: vs "H3a + defer".
     Training done; **step 500 chosen on validation** (70.6%, 1.63 tests per patient); test pending.
+  - **H3d** (`docs/HYPOTHESIS_H3D.md`): the same design with the **test-cost weight halved**. The reward
+    makes "no tests" optimal once the HA is good from history alone (78%): a CT costs as much reward
+    as 13 accuracy points. Base design (defer or plain) decided by H3c's test result.
 
 ## Where the details are
 

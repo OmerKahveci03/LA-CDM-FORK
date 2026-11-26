@@ -77,8 +77,16 @@ def main() -> None:
     parser.add_argument("--resamples", type=int, default=2000)
     parser.add_argument("--h3c-dir", default=None,
                         help="H3c test folder (docs/HYPOTHESIS_H3C.md); adds its pre-registered comparisons")
+    parser.add_argument("--h3d-dir", default=None,
+                        help="H3d test folder (docs/HYPOTHESIS_H3D.md); adds its comparisons with H3a + defer and the baseline")
     args = parser.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
+    if args.h3d_dir:  # fixed in docs/HYPOTHESIS_H3D.md before training
+        COMPARISONS.extend([
+            ("MIMIC: H3d vs H3a + defer", (args.h3d_dir, "diagnosis"),
+             ("outputs/h3/h3a_ha0/frozen_ha_seed0_step_0700", "final_hypothesis"), "H3d secondary"),
+            ("MIMIC: H3d vs baseline", (args.h3d_dir, "diagnosis"), (f"{R}/test_step_0600", "diagnosis"), "H3d secondary"),
+        ])
     if args.h3c_dir:  # fixed in docs/HYPOTHESIS_H3C.md before training
         COMPARISONS.extend([
             ("MIMIC: H3c vs H3a + defer", (args.h3c_dir, "diagnosis"),
