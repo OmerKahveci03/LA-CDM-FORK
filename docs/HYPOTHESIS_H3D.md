@@ -68,4 +68,7 @@ sbatch --export=ALL,SCRIPT=jobs/h3d_stats.sh,DESIGN=<design>,STEP=<step> slurm/c
 
 ## Results
 
+- **Design decided (November 26):** H3c's test accuracy was 83.8% < 88.3%, so **DESIGN=plain**: H3a with
+  the cost weight halved. Primary comparison: H3d vs H3a (step 700).
+
 (to be filled in)

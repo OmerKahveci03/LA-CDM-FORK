@@ -151,17 +151,22 @@ Unless noted, everything is on the same **240 MIMIC test patients**.
   - **The joint arm drifted the same way:** from step 1,200 on, 0.04–0.17 tests per patient, while
     validation accuracy rose to 73–75%. **H3c was starting to drift by step 700** (0.33 tests). With this
     reward, longer training reliably learns to skip tests, and accuracy-only validation rewards it,
-    likely because shorter episodes leave fewer chances for format errors. Exploratory test of the
-    joint arm at step 1,000 (the best step with ≥ 0.5 tests) pending.
+    likely because shorter episodes leave fewer chances for format errors.
+  - **Joint at step 1,000** (the best step with ≥ 0.5 tests, exploratory): **77.5% with 1.52 tests but
+    $223 per case**. It switched to cheap, uninformative tests, so the test-count guard was gamed.
+    −8.3 vs H3a, −7.9 vs baseline (both significant after Holm). **Longer training converges on minimal
+    spending, either no tests or cheap ones.**
   - The joint arm's accidental repeat of steps 100–700 differed from the original by up to 10.7
     points at the same step: direct evidence of **run-to-run noise**.
 - **Pending:**
   - **H3c** (`docs/HYPOTHESIS_H3C.md`): a new DA trained against the frozen HA where the HA's hypothesis
     is always the diagnosis (the DA never overrides it). Primary comparison: vs "H3a + defer".
-    Training done; **step 500 chosen on validation** (70.6%, 1.63 tests per patient); test pending.
+    Step 500 chosen on validation. **Test: 83.8%, significantly worse than H3a + defer (88.3%):
+    −4.6 [−7.5, −1.7], +1/−12 patients, p = 0.003**; vs baseline −1.7 and vs H3a −2.1 (both n.s.).
+    **Training the DA with deferral built in was worse than deferring after training.** Single run.
   - **H3d** (`docs/HYPOTHESIS_H3D.md`): the same design with the **test-cost weight halved**. The reward
     makes "no tests" optimal once the HA is good from history alone (78%): a CT costs as much reward
-    as 13 accuracy points. Base design (defer or plain) decided by H3c's test result.
+    as 13 accuracy points. Base design: **plain** (H3a), because H3c scored below 88.3%. Training now.
 
 ## Where the details are
 

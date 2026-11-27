@@ -82,4 +82,19 @@ sbatch --export=ALL,ADAPTER_STEP=<step> slurm/evaluate_defer_ha.sbatch
 guard). Step 700 was already drifting into the zero-test shortcut (0.33 tests, $86) and would have
 been excluded by the guard anyway.
 
-(test results to be filled in)
+**Test (step 500; `outputs/h3/h3c_ha0/defer_ha_seed0_step_0500`, statistics `outputs/h3/h3c_ha0/stats_*`
+and `outputs/final_analyses/a6_defer_vs_baseline.md`):** **83.8%** [78.6, 87.9], 1.67 tests per patient,
+$1,035 per case.
+
+| Comparison | Other | Difference [95% CI] | Wins/losses | p |
+|---|---|---|---|---|
+| **vs H3a + defer (primary)** | 88.3 | **−4.6 [−7.5, −1.7]** | +1/−12 | **0.003** |
+| vs baseline | 85.4 | −1.7 [−7.1, +3.8] | +20/−24 | 0.65 |
+| vs H3a (its own DA) | 85.8 | −2.1 [−5.8, +2.1] | +9/−14 | 0.40 |
+
+**Verdict: not supported, and worse than the alternative.** Training the DA with deferral built in
+was significantly *worse* than training it to diagnose and deferring afterwards (H3a + defer). It
+ordered more tests (1.67 vs 1.27) at about the same cost. One plausible, unverified reason: when its
+own diagnosis does not count, the DA's reward is a weaker, noisier signal, so it learns test selection
+less well. Single run (two identical runs have differed by up to 11 points), so the size is uncertain.
+Per `docs/HYPOTHESIS_H3D.md`, H3c < 88.3%, so **H3d uses DESIGN=plain**.

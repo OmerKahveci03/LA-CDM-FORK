@@ -263,6 +263,11 @@ above were seen. The 700-step H4c result stays the primary one.
     steps, and validation accuracy rose while it did. Unguarded, the best step would be 1800 (75.3%,
     0.05 tests). **Exploratory choice: step 1000**, the best step with ≥ 0.5 tests per patient. This
     is the H3c guard, applied here **after** seeing the frozen arm's step-1100 collapse, and reported as such.
+  - **Joint step 1000 on test** (`outputs/contrastive/stats/joint_ext_*`): **77.5%, 1.52 tests but only
+    $223 per case**. It orders cheap, uninformative tests instead of none, so the ≥ 0.5-tests guard
+    was gamed. vs H3a −8.3 [−13.3, −3.3] (Holm 0.007); vs baseline −7.9 [−13.8, −2.1] (Holm 0.033); vs
+    the original joint step 600 −6.7 [−11.3, −2.1] (Holm 0.027); vs frozen step 1100 −1.2 (n.s.).
+    **Longer training converges on minimal spending, either no tests or cheap ones.**
   - The current joint run is a **second joint run from step 100** (exploratory). Its steps 200–700
     repeat the original with the same settings: 58.8, 61.3, 66.4, 67.7, **67.9**, 64.3% against the
     original 54.6, 62.5, 55.7, 70.8, **73.6**, 68.5%. The two runs differ by up to 10.7 points at
