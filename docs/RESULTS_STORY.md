@@ -1,6 +1,6 @@
 # Results story: every experiment in one line of reasoning
 
-**The single summary of all results, in order.** Last updated **November 25, 2026**. Update it
+**The single summary of all results, in order.** Last updated **November 26, 2026**. Update it
 whenever a result arrives; the details behind each bullet are in the linked documents.
 
 Unless noted, everything is on the same **240 MIMIC test patients**.
@@ -158,21 +158,30 @@ Unless noted, everything is on the same **240 MIMIC test patients**.
     spending, either no tests or cheap ones.**
   - The joint arm's accidental repeat of steps 100–700 differed from the original by up to 10.7
     points at the same step: direct evidence of **run-to-run noise**.
-- **Pending:**
-  - **H3c** (`docs/HYPOTHESIS_H3C.md`): a new DA trained against the frozen HA where the HA's hypothesis
-    is always the diagnosis (the DA never overrides it). Primary comparison: vs "H3a + defer".
-    Step 500 chosen on validation. **Test: 83.8%, significantly worse than H3a + defer (88.3%):
-    −4.6 [−7.5, −1.7], +1/−12 patients, p = 0.003**; vs baseline −1.7 and vs H3a −2.1 (both n.s.).
-    **Training the DA with deferral built in was worse than deferring after training.** Single run.
-  - **H3d** (`docs/HYPOTHESIS_H3D.md`): the same design with the **test-cost weight halved**. The reward
-    makes "no tests" optimal once the HA is good from history alone (78%): a CT costs as much reward
-    as 13 accuracy points. Base design: **plain** (H3a), because H3c scored below 88.3%. Training now.
+- **H3c, a DA trained to never override the HA** (`docs/HYPOTHESIS_H3C.md`): a new DA trained against the
+  frozen separately fine-tuned HA, where the HA's hypothesis was always recorded as the diagnosis (the
+  DA only chose tests and when to stop). Step 500 chosen on validation (70.6%, 1.63 tests).
+  - **Test: 83.8%**, 1.67 tests, $1,035.
+  - **vs H3a + defer (88.3%, primary): −4.6 [−7.5, −1.7], +1/−12 patients, p = 0.003: worse.** vs
+    baseline −1.7 and vs H3a −2.1 (both n.s.).
+  - **Training the DA with deferral built in was worse than training it to diagnose and deferring
+    afterwards.** Single run; one plausible reason is a weaker learning signal when its own diagnosis
+    does not count.
+- **Why longer training skips tests (the reward):** a correct diagnosis earns +1.0, while a CT costs
+  −0.128 and an ultrasound −0.126. The separately fine-tuned HA is about 78% right from the history alone
+  and about 88% with tests, so +10 points of accuracy cost about one CT, and spending nothing scores at
+  least as well (frozen step 1,100's 78.8% at $0 beats H3a's 85.8% at $1,025 in reward). **A better HA
+  made tests less valuable to a cost-sensitive DA.**
+- **Pending: H3d** (`docs/HYPOTHESIS_H3D.md`): H3a with the **test-cost weight halved** (a CT then
+  costs about 6 accuracy points of reward instead of 13). Base design **plain** (H3a), because H3c scored
+  below 88.3%. Training now; results expected Friday.
 
 ## Where the details are
 
 | Topic | Document |
 |---|---|
 | H1–H4 plans, rules, full results | `docs/HYPOTHESIS_H1.md` … `docs/HYPOTHESIS_H4.md`, `docs/STEP2_COMBINED.md` |
+| H3c (DA trained to defer), H3d (cost weight halved) | `docs/HYPOTHESIS_H3C.md`, `docs/HYPOTHESIS_H3D.md` |
 | Final analyses A1–A5 | `docs/FINAL_ANALYSES.md` |
 | External validation | `edward/README.md` |
 | Ideas not yet run | `docs/NEXT_EXPERIMENTS.md` |
